@@ -1,11 +1,10 @@
-use ahash::AHashMap;
-use fs_err as fs;
-use std::collections::HashMap;
 use std::fmt::Write as _;
 use std::io::Read;
 use std::path::PathBuf;
 
+use ahash::AHashMap;
 use base64::engine::{Engine, general_purpose::STANDARD as standard_b64};
+use fs_err as fs;
 use sha2::{Sha256, Sha384, Sha512, digest};
 
 use config::Config;
@@ -38,7 +37,7 @@ where
 pub struct GetUrl {
     base_path: PathBuf,
     config: Config,
-    permalinks: HashMap<String, String>,
+    permalinks: AHashMap<String, String>,
     output_path: PathBuf,
     colocated_assets: AHashMap<String, (String, String)>,
 }
@@ -47,7 +46,7 @@ impl GetUrl {
     pub fn new(
         base_path: PathBuf,
         config: Config,
-        permalinks: HashMap<String, String>,
+        permalinks: AHashMap<String, String>,
         output_path: PathBuf,
         colocated_assets: AHashMap<String, (String, String)>,
     ) -> Self {
@@ -247,7 +246,6 @@ mod tests {
 
     use ahash::AHashMap;
     use fs_err as fs;
-    use std::collections::HashMap;
     use std::path::PathBuf;
     use tempfile::{TempDir, tempdir};
     use tera::{Context, Function, Kwargs, State};
@@ -279,7 +277,7 @@ title = "A title"
         let get_url = GetUrl::new(
             dir.path().to_path_buf(),
             Config::default(),
-            HashMap::new(),
+            AHashMap::new(),
             PathBuf::new(),
             AHashMap::new(),
         );
@@ -313,7 +311,7 @@ title = "A title"
         let get_url = GetUrl::new(
             dir.path().to_path_buf(),
             Config::default(),
-            HashMap::new(),
+            AHashMap::new(),
             PathBuf::new(),
             AHashMap::new(),
         );
@@ -335,7 +333,7 @@ title = "A title"
         let get_url = GetUrl::new(
             dir.path().to_path_buf(),
             Config::default(),
-            HashMap::new(),
+            AHashMap::new(),
             PathBuf::new(),
             AHashMap::new(),
         );
@@ -358,7 +356,7 @@ title = "A title"
         let get_url = GetUrl::new(
             dir.path().to_path_buf(),
             Config::default(),
-            HashMap::new(),
+            AHashMap::new(),
             PathBuf::new(),
             AHashMap::new(),
         );
@@ -389,7 +387,7 @@ title = "A title"
         let get_url = GetUrl::new(
             dir.path().to_path_buf(),
             Config::default(),
-            HashMap::new(),
+            AHashMap::new(),
             public,
             AHashMap::new(),
         );
@@ -409,7 +407,7 @@ title = "A title"
         let get_url = GetUrl::new(
             dir.path().to_path_buf(),
             config,
-            HashMap::new(),
+            AHashMap::new(),
             PathBuf::new(),
             AHashMap::new(),
         );
@@ -425,7 +423,7 @@ title = "A title"
 
     #[test]
     fn can_get_url_with_default_language() {
-        let mut permalinks = HashMap::new();
+        let mut permalinks = AHashMap::new();
         permalinks.insert(
             "a_section/a_page.md".to_string(),
             "https://remplace-par-ton-url.fr/a_section/a_page/".to_string(),
@@ -458,7 +456,7 @@ title = "A title"
     #[test]
     fn can_get_url_with_other_language() {
         let config = Config::parse(CONFIG_DATA).unwrap();
-        let mut permalinks = HashMap::new();
+        let mut permalinks = AHashMap::new();
         permalinks.insert(
             "a_section/a_page.md".to_string(),
             "https://remplace-par-ton-url.fr/a_section/a_page/".to_string(),
@@ -492,7 +490,7 @@ title = "A title"
     #[test]
     fn can_get_colocated_asset_url() {
         let config = Config::parse(CONFIG_DATA).unwrap();
-        let mut permalinks = HashMap::new();
+        let mut permalinks = AHashMap::new();
         permalinks.insert(
             "a_section/an_article/index.md".to_string(),
             "https://remplace-par-ton-url.fr/a_section/mon_article/".to_string(),
@@ -540,7 +538,7 @@ title = "A title"
     #[test]
     fn does_not_duplicate_lang() {
         let config = Config::parse(CONFIG_DATA).unwrap();
-        let mut permalinks = HashMap::new();
+        let mut permalinks = AHashMap::new();
         permalinks.insert(
             "a_section/a_page.md".to_string(),
             "https://remplace-par-ton-url.fr/a_section/a_page/".to_string(),
@@ -576,7 +574,7 @@ title = "A title"
         let get_url = GetUrl::new(
             dir.path().to_path_buf(),
             config.clone(),
-            HashMap::new(),
+            AHashMap::new(),
             PathBuf::new(),
             AHashMap::new(),
         );
@@ -601,7 +599,7 @@ title = "A title"
         let get_url = GetUrl::new(
             dir.path().to_path_buf(),
             config.clone(),
-            HashMap::new(),
+            AHashMap::new(),
             PathBuf::new(),
             AHashMap::new(),
         );
@@ -818,7 +816,7 @@ title = "A title"
         let get_url = GetUrl::new(
             dir.path().to_path_buf(),
             config,
-            HashMap::new(),
+            AHashMap::new(),
             PathBuf::new(),
             AHashMap::new(),
         );
@@ -852,7 +850,7 @@ title = "A title"
         let get_url = GetUrl::new(
             dir.path().to_path_buf(),
             config,
-            HashMap::new(),
+            AHashMap::new(),
             PathBuf::new(),
             AHashMap::new(),
         );
