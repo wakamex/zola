@@ -149,11 +149,54 @@ impl Site {
     /// The index sections are ALWAYS at those paths
     /// There are one index section for the default language + 1 per language
     fn index_section_paths(&self) -> Vec<(PathBuf, Option<&str>)> {
-        let mut res = vec![(self.content_path.join("_index.md"), None)];
+        let default =
+            if self.config.content.root_index && self.content_path.join("index.md").exists() {
+                self.content_path.join("index.md")
+            } else {
+                self.content_path.join("_index.md")
+            };
+        let mut res = vec![(default, None)];
         for (code, _) in self.config.other_languages() {
-            res.push((self.content_path.join(format!("_index.{}.md", code)), Some(code)));
+            let configured = self.content_path.join(format!("index.{code}.md"));
+            let path = if self.config.content.root_index && configured.exists() {
+                configured
+            } else {
+                self.content_path.join(format!("_index.{code}.md"))
+            };
+            res.push((path, Some(code)));
         }
         res
+    }
+
+    fn is_configured_root_index(&self, path: &Path) -> bool {
+        if !self.config.content.root_index || path.parent() != Some(self.content_path.as_path()) {
+            return false;
+        }
+        let filename = path.file_name().and_then(|name| name.to_str()).unwrap_or_default();
+        filename == "index.md"
+            || self
+                .config
+                .other_languages()
+                .keys()
+                .any(|lang| filename == format!("index.{lang}.md"))
+    }
+
+    fn section_path_for_parent(&self, parent: &Path, lang: &str) -> PathBuf {
+        if parent == self.content_path {
+            let configured = if lang == self.config.default_language {
+                parent.join("index.md")
+            } else {
+                parent.join(format!("index.{lang}.md"))
+            };
+            if self.config.content.root_index && self.library.sections.contains_key(&configured) {
+                return configured;
+            }
+        }
+        if lang == self.config.default_language {
+            parent.join("_index.md")
+        } else {
+            parent.join(format!("_index.{lang}.md"))
+        }
     }
 
     /// We avoid the port the server is going to use as it's not bound yet
@@ -236,7 +279,7 @@ impl Site {
             // we process a section when we encounter the dir
             // so we can process it before any of the pages
             // therefore we should skip the actual file to avoid duplication
-            if file_name.starts_with("_index.") {
+            if file_name.starts_with("_index.") || self.is_configured_root_index(path) {
                 continue;
             }
 
@@ -268,7 +311,39 @@ impl Site {
                     })
                     .collect::<Vec<DirEntry>>();
 
-                for index_file in index_files {
+                let is_root = path == self.content_path;
+                let mut index_files = index_files;
+                if is_root && self.config.content.root_index {
+                    let mut configured = WalkDir::new(path)
+                        .follow_links(true)
+                        .max_depth(1)
+                        .into_iter()
+                        .filter_map(|entry| entry.ok())
+                        .filter(|entry| {
+                            entry.path().is_file() && self.is_configured_root_index(entry.path())
+                        })
+                        .collect::<Vec<_>>();
+                    for configured_entry in &configured {
+                        let configured_name =
+                            configured_entry.path().file_name().unwrap().to_string_lossy();
+                        let conventional_name = if configured_name == "index.md" {
+                            "_index.md".to_string()
+                        } else {
+                            configured_name.replacen("index.", "_index.", 1)
+                        };
+                        if index_files
+                            .iter()
+                            .any(|entry| entry.file_name() == conventional_name.as_str())
+                        {
+                            bail!(
+                                "Root section is defined by both `{configured_name}` and `{conventional_name}`"
+                            );
+                        }
+                    }
+                    index_files.append(&mut configured);
+                }
+
+                for index_file in &index_files {
                     let section =
                         Section::from_file(index_file.path(), &self.config, &self.base_path)?;
                     sections.insert(section.components.join("/"));
@@ -280,6 +355,45 @@ impl Site {
                     }
 
                     self.add_section(section, false)?;
+                }
+
+                if self.config.content.implicit_sections && !is_root && index_files.is_empty() {
+                    let has_page_bundle = WalkDir::new(path)
+                        .max_depth(1)
+                        .into_iter()
+                        .filter_map(|entry| entry.ok())
+                        .any(|entry| {
+                            let filename = entry.file_name().to_string_lossy();
+                            entry.path().is_file()
+                                && (filename == "index.md"
+                                    || self
+                                        .config
+                                        .other_languages()
+                                        .keys()
+                                        .any(|lang| filename == format!("index.{lang}.md")))
+                        });
+                    if !has_page_bundle {
+                        let mut languages =
+                            self.config.languages.keys().cloned().collect::<Vec<_>>();
+                        languages.sort();
+                        for lang in languages {
+                            let filename = if lang == self.config.default_language {
+                                "_index.md".to_string()
+                            } else {
+                                format!("_index.{lang}.md")
+                            };
+                            let synthetic_path = path.join(filename);
+                            let mut section = Section::parse(
+                                &synthetic_path,
+                                "+++\n+++\n",
+                                &self.config,
+                                &self.base_path,
+                            )?;
+                            section.implicit = true;
+                            sections.insert(section.components.join("/"));
+                            self.add_section(section, false)?;
+                        }
+                    }
                 }
             } else {
                 page_paths.push(path.to_path_buf());
@@ -318,7 +432,7 @@ impl Site {
             if page.file.filename == "index.md" {
                 let is_invalid = match page.components.last() {
                     Some(_) => sections.contains(&page.components.join("/")),
-                    // content/index.md is always invalid, but content/colocated/index.md is ok
+                    // content/index.md is accepted only as a configured root section.
                     None => page.file.colocated_path.is_none(),
                 };
 
@@ -618,11 +732,7 @@ impl Site {
         parent_path: &Path,
         lang: &str,
     ) -> InsertAnchor {
-        let parent = if lang != self.config.default_language {
-            parent_path.join(format!("_index.{}.md", lang))
-        } else {
-            parent_path.join("_index.md")
-        };
+        let parent = self.section_path_for_parent(parent_path, lang);
         self.library
             .sections
             .get(&parent)

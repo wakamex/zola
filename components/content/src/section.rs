@@ -68,6 +68,8 @@ pub struct Section {
     pub colocated_assets: AHashMap<String, (String, String)>,
     /// Computed visibility
     pub hidden: bool,
+    /// Whether the section was synthesized for a directory without `_index.md`.
+    pub implicit: bool,
 }
 
 impl Section {
