@@ -626,6 +626,10 @@ impl<'a> State<'a> {
                 self.push(Event::Text(text));
             }
 
+            Event::SoftBreak if ctx.config.markdown.hard_breaks => {
+                self.push(Event::HardBreak);
+            }
+
             // HTML (check for summary marker)
             Event::Html(html) | Event::InlineHtml(html) => {
                 if self.summary_index.is_none() && MORE_DIVIDER_RE.is_match(&html) {
