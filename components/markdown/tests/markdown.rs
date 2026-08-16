@@ -522,3 +522,15 @@ fn wikilink_nonexistent() {
     config.link_checker.internal_level = config::LinkCheckerLevel::Error;
     assert!(common::render_with_config("[[nope]]", config).is_err());
 }
+
+#[test]
+fn hard_breaks_are_opt_in() {
+    let markdown = "First line\nSecond line";
+    let default_body = common::render(markdown).unwrap().body;
+    assert_eq!(default_body, "<p>First line\nSecond line</p>\n");
+
+    let mut config = Config::default_for_test();
+    config.markdown.hard_breaks = true;
+    let hard_break_body = common::render_with_config(markdown, config).unwrap().body;
+    assert_eq!(hard_break_body, "<p>First line<br />\nSecond line</p>\n");
+}

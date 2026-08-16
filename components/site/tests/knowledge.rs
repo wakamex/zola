@@ -19,6 +19,7 @@ compile_sass = false
 build_search_index = false
 generate_sitemap = false
 generate_robots_txt = false
+skip_content_templating = ["raw/**"]
 
 [content]
 front_matter = "optional"
@@ -108,4 +109,21 @@ fn reports_every_candidate_for_an_ambiguous_stem() {
     assert!(message.contains("target is ambiguous"));
     assert!(message.contains("archive/duplicate.md"));
     assert!(message.contains("guides/duplicate.md"));
+}
+
+#[test]
+fn preserves_raw_html_and_literal_template_source() {
+    let root = knowledge_site("");
+    fs::create_dir_all(root.path().join("content/raw")).unwrap();
+    fs::write(
+        root.path().join("content/raw/transcript.md"),
+        "<aside data-source=\"capture\">Raw HTML</aside>\n\nLiteral {{ captured.value }}\n",
+    )
+    .unwrap();
+
+    let mut site = Site::new(root.path(), "config.toml").unwrap();
+    site.load().unwrap();
+    let transcript = &site.library.pages[&root.path().join("content/raw/transcript.md")];
+    assert!(transcript.content.contains("<aside data-source=\"capture\">Raw HTML</aside>"));
+    assert!(transcript.content.contains("{{ captured.value }}"));
 }
