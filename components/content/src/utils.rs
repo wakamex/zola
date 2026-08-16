@@ -52,6 +52,18 @@ pub fn find_related_assets(path: &Path, config: &Config, recursive: bool) -> Vec
         assets.retain(|p| !globset.is_match(p));
     }
 
+    if config.content.asset_include.is_some() {
+        assets.retain(|path| {
+            let components = path.components().collect::<Vec<_>>();
+            let relative = components
+                .iter()
+                .rposition(|component| component.as_os_str() == "content")
+                .map(|position| components[position + 1..].iter().collect::<PathBuf>())
+                .unwrap_or_else(|| path.to_path_buf());
+            config.content.is_asset_allowed(&relative)
+        });
+    }
+
     assets.sort_by_cached_key(|a| a.to_str().unwrap().to_ascii_lowercase());
 
     assets

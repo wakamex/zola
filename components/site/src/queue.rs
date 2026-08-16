@@ -264,6 +264,7 @@ impl<'a> Queue<'a> {
             _ => output.content,
         };
         let relative_path = output.path.strip_prefix("/").unwrap_or(&output.path);
+        self.site.validate_file_size(content.len() as u64, relative_path)?;
 
         // First write to disk when needed
         match self.site.build_mode {

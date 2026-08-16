@@ -148,6 +148,25 @@ impl Section {
         Ok(section)
     }
 
+    pub fn from_implicit_path(path: &Path, config: &Config, base_path: &Path) -> Result<Section> {
+        let mut section = Section::parse(path, "+++\n+++\n", config, base_path)?;
+        section.implicit = true;
+        let parent_dir = path.parent().unwrap();
+        section.assets = find_related_assets(parent_dir, config, false);
+        section.serialized_assets = section.serialize_assets();
+        if let Some(colocated_path) = section.file.colocated_path.as_ref()
+            && !section.assets.is_empty()
+        {
+            section.colocated_assets = get_colocated_assets(
+                &section.assets,
+                section.file.path.parent().unwrap(),
+                colocated_path,
+                &format!("{}_index.md", colocated_path),
+            );
+        }
+        Ok(section)
+    }
+
     pub fn get_template_name(&self) -> &str {
         match self.meta.template {
             Some(ref l) => l,
