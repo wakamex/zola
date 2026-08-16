@@ -10,8 +10,8 @@ use regex::{Regex, RegexBuilder};
 use errors::{Error, Result, bail};
 use render::render_anchor_link;
 use utils::net::is_external_link;
-use utils::site::WikilinkError;
 use utils::site::resolve_internal_link;
+use utils::site::{WikilinkError, WikilinkResolver};
 use utils::slugs::slugify_anchors;
 use utils::table_of_contents::{Heading, make_table_of_contents};
 use utils::types::InsertAnchor;
@@ -422,14 +422,37 @@ impl<'a> State<'a> {
                 Some((k, a)) => (k, Some(a.to_string())),
                 None => (link, None),
             };
-            match ctx.wikilinks.resolve(
+            if key.is_empty()
+                && let Some(anchor) = anchor
+            {
+                if !ctx.current_path.is_empty() {
+                    self.internal_links.push((ctx.current_path.to_owned(), Some(anchor.clone())));
+                }
+                return Ok(format!("{}#{anchor}", ctx.current_permalink));
+            }
+            let resolution = ctx.wikilinks.resolve(
                 ctx.current_path,
                 ctx.lang,
                 &ctx.config.default_language,
                 key,
-            ) {
+            );
+            if matches!(resolution, Err(WikilinkError::Missing))
+                && let Ok((normalized, _)) =
+                    WikilinkResolver::normalize_target(ctx.current_path, key)
+                && ctx.config.link_checker.allowed_missing_wikilinks.contains(&normalized)
+            {
+                let mut permalink = ctx.config.make_permalink(&format!("/{normalized}/"));
+                if let Some(anchor) = anchor {
+                    permalink.push('#');
+                    permalink.push_str(&anchor);
+                }
+                return Ok(permalink);
+            }
+            match resolution {
                 Ok(resolved) => {
-                    self.internal_links.push((resolved.md_path, anchor.clone()));
+                    if resolved.track_backlink {
+                        self.internal_links.push((resolved.md_path, anchor.clone()));
+                    }
                     match anchor {
                         Some(a) => format!("{}#{}", resolved.permalink, a),
                         None => resolved.permalink,

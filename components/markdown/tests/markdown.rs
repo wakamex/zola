@@ -40,6 +40,26 @@ fn can_make_zola_internal_links() {
 }
 
 #[test]
+fn can_make_self_anchor_wikilinks() {
+    let mut config = Config::default_for_test();
+    config.markdown.wikilinks = true;
+    let rendered =
+        common::render_with_config("[[#details|Details]]\n\n## Details", config).unwrap();
+    assert!(rendered.body.contains("href=\"https://www.getzola.org/test/#details\""));
+    assert_eq!(rendered.internal_links, [("my_page.md".to_string(), Some("details".to_string()))]);
+}
+
+#[test]
+fn can_make_intentional_forward_wikilinks() {
+    let mut config = Config::default_for_test();
+    config.markdown.wikilinks = true;
+    config.link_checker.allowed_missing_wikilinks.push("sources/future-page".to_string());
+    let rendered = common::render_with_config("[[sources/future-page|Future]]", config).unwrap();
+    assert!(rendered.body.contains("href=\"http://a-website.com/sources/future-page/\""));
+    assert!(rendered.internal_links.is_empty());
+}
+
+#[test]
 fn can_handle_heading_ids() {
     let mut config = Config::default_for_test();
 

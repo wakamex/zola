@@ -1,5 +1,6 @@
+use ahash::AHashMap;
 use config::Config;
-use content::Library;
+use content::{Library, Taxonomy};
 use utils::site::{WikilinkResolver, WikilinkTarget};
 
 fn identity(source_path: &str, lang: &str, default_lang: &str) -> String {
@@ -11,13 +12,18 @@ fn identity(source_path: &str, lang: &str, default_lang: &str) -> String {
     }
 }
 
-pub fn build_wikilinks(library: &Library, config: &Config) -> WikilinkResolver {
+pub fn build_wikilinks(
+    library: &Library,
+    taxonomies: &[Taxonomy],
+    config: &Config,
+) -> WikilinkResolver {
     let pages = library.pages.values().filter(|page| page.meta.render).map(|page| WikilinkTarget {
         source_path: page.file.relative.clone(),
         identity: identity(&page.file.relative, &page.lang, &config.default_language),
         permalink: page.permalink.clone(),
         aliases: page.meta.aliases.clone(),
         lang: page.lang.clone(),
+        track_backlink: true,
     });
     let sections = library.sections.values().filter(|section| section.meta.render).map(|section| {
         WikilinkTarget {
@@ -26,9 +32,45 @@ pub fn build_wikilinks(library: &Library, config: &Config) -> WikilinkResolver {
             permalink: section.permalink.clone(),
             aliases: section.meta.aliases.clone(),
             lang: section.lang.clone(),
+            track_backlink: true,
         }
     });
-    WikilinkResolver::from_targets(pages.chain(sections))
+    let owners = library
+        .pages
+        .values()
+        .map(|page| (&page.file.relative, (&page.permalink, &page.lang)))
+        .chain(
+            library
+                .sections
+                .values()
+                .map(|section| (&section.file.relative, (&section.permalink, &section.lang))),
+        )
+        .collect::<AHashMap<_, _>>();
+    let assets = library.colocated_assets.iter().filter_map(|(path, (owner, relative))| {
+        let (permalink, lang) = owners.get(owner)?;
+        Some(WikilinkTarget {
+            source_path: path.clone(),
+            identity: path.clone(),
+            permalink: format!("{permalink}{relative}"),
+            aliases: Vec::new(),
+            lang: (*lang).clone(),
+            track_backlink: false,
+        })
+    });
+    let taxonomy_terms = taxonomies.iter().flat_map(|taxonomy| {
+        taxonomy.items.iter().map(|term| {
+            let identity = term.path.trim_matches('/').to_string();
+            WikilinkTarget {
+                source_path: identity.clone(),
+                identity,
+                permalink: term.permalink.clone(),
+                aliases: Vec::new(),
+                lang: taxonomy.lang.clone(),
+                track_backlink: false,
+            }
+        })
+    });
+    WikilinkResolver::from_targets(pages.chain(sections).chain(assets).chain(taxonomy_terms))
 }
 
 #[cfg(test)]
@@ -54,7 +96,7 @@ mod tests {
         page.meta.aliases = vec!["start".to_string()];
         library.insert_page(page);
 
-        let resolver = build_wikilinks(&library, &config);
+        let resolver = build_wikilinks(&library, &[], &config);
         assert_eq!(
             resolver.resolve("index.md", "en", "en", "quickstart").unwrap().md_path,
             "guides/quickstart.md"

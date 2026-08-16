@@ -753,7 +753,7 @@ impl Site {
 
     fn build_wikilinks(&mut self) {
         if self.config.markdown.wikilinks {
-            self.wikilinks = build_wikilinks(&self.library, &self.config);
+            self.wikilinks = build_wikilinks(&self.library, &self.taxonomies, &self.config);
         } else {
             self.wikilinks = WikilinkResolver::default();
         }
