@@ -85,6 +85,10 @@ fn can_fast_reload_content(
     !wikilinks_enabled && *event_kind != SimpleFileSystemEventKind::Remove
 }
 
+fn allow_output_overwrite(initial_force: bool, rebuilding: bool) -> bool {
+    initial_force || rebuilding
+}
+
 static SERVE_ERROR: Mutex<Cell<Option<(&'static str, Error)>>> = Mutex::new(Cell::new(None));
 
 struct AppState {
@@ -517,6 +521,9 @@ fn create_new_site(
         }
         site.set_output_path(output_dir);
     }
+    if force {
+        site.clean()?;
+    }
     if include_drafts {
         site.include_drafts();
     }
@@ -553,7 +560,7 @@ pub fn serve(
         interface,
         interface_port,
         output_dir,
-        force,
+        allow_output_overwrite(force, false),
         base_url,
         config_file,
         include_drafts,
@@ -762,7 +769,7 @@ pub fn serve(
         interface,
         interface_port,
         output_dir,
-        force,
+        allow_output_overwrite(force, true),
         base_url,
         config_file,
         include_drafts,
@@ -940,12 +947,17 @@ pub fn serve(
 
 #[cfg(test)]
 mod tests {
-    use super::{can_fast_reload_content, construct_url, create_new_site, strip_base_path};
+    use super::{
+        allow_output_overwrite, can_fast_reload_content, construct_url, create_new_site,
+        strip_base_path,
+    };
     use crate::fs_utils::SimpleFileSystemEventKind;
     use crate::get_config_file_path;
+    use std::fs;
     use std::net::{IpAddr, SocketAddr};
     use std::path::Path;
     use std::str::FromStr;
+    use std::time::{SystemTime, UNIX_EPOCH};
     use url::Url;
 
     #[test]
@@ -961,6 +973,57 @@ mod tests {
         assert!(can_fast_reload_content(&SimpleFileSystemEventKind::Create, false));
         assert!(can_fast_reload_content(&SimpleFileSystemEventKind::Modify, false));
         assert!(!can_fast_reload_content(&SimpleFileSystemEventKind::Remove, false));
+    }
+
+    #[test]
+    fn serve_rebuilds_overwrite_the_managed_output_directory() {
+        assert!(!allow_output_overwrite(false, false));
+        assert!(allow_output_overwrite(true, false));
+        assert!(allow_output_overwrite(false, true));
+        assert!(allow_output_overwrite(true, true));
+    }
+
+    #[test]
+    fn forced_site_recreation_removes_stale_output() {
+        let nonce = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let output =
+            std::env::temp_dir().join(format!("zola-serve-rebuild-{}-{nonce}", std::process::id()));
+        let root = Path::new("./test_site").canonicalize().unwrap();
+        let config = root.join("config.toml");
+        let interface = IpAddr::from_str("127.0.0.1").unwrap();
+
+        create_new_site(
+            &root,
+            interface,
+            1111,
+            Some(&output),
+            false,
+            None,
+            &config,
+            false,
+            true,
+            false,
+        )
+        .unwrap();
+        let stale = output.join("stale.html");
+        fs::write(&stale, "stale").unwrap();
+
+        create_new_site(
+            &root,
+            interface,
+            1111,
+            Some(&output),
+            true,
+            None,
+            &config,
+            false,
+            true,
+            false,
+        )
+        .unwrap();
+
+        assert!(!stale.exists());
+        fs::remove_dir_all(output).unwrap();
     }
 
     #[test]

@@ -52,8 +52,13 @@ fn get_relevant_event_kind(event_kind: &EventKind) -> Option<SimpleFileSystemEve
         | EventKind::Modify(ModifyKind::Any)
         // Intellij modifies file metadata on edit.
         // https://github.com/passcod/notify/issues/150#issuecomment-494912080
-        | EventKind::Modify(ModifyKind::Metadata(MetadataKind::WriteTime | MetadataKind::Permissions | MetadataKind::Ownership))
-        | EventKind::Modify(ModifyKind::Name(RenameMode::To)) => Some(SimpleFileSystemEventKind::Modify),
+        | EventKind::Modify(ModifyKind::Metadata(MetadataKind::WriteTime | MetadataKind::Permissions | MetadataKind::Ownership)) => Some(SimpleFileSystemEventKind::Modify),
+        EventKind::Modify(ModifyKind::Name(RenameMode::From)) => {
+            Some(SimpleFileSystemEventKind::Remove)
+        }
+        EventKind::Modify(ModifyKind::Name(RenameMode::To)) => {
+            Some(SimpleFileSystemEventKind::Create)
+        }
         // Windows only reports remove events at the `Any` granularity.
         // `Other` sometimes represents unmount events in some filesystems.
         EventKind::Remove(RemoveKind::Any | RemoveKind::File | RemoveKind::Folder | RemoveKind::Other) => {
@@ -63,7 +68,7 @@ fn get_relevant_event_kind(event_kind: &EventKind) -> Option<SimpleFileSystemEve
         // `Access` events according to docs are non-mutating, so it's safe to catch-all ignore them.
         EventKind::Access(_) |
         EventKind::Modify(
-            ModifyKind::Name(RenameMode::From | RenameMode::Both | RenameMode::Other) |
+            ModifyKind::Name(RenameMode::Both | RenameMode::Other) |
             ModifyKind::Metadata(MetadataKind::Any | MetadataKind::AccessTime | MetadataKind::Extended | MetadataKind::Other) |
             ModifyKind::Other) |
         EventKind::Other => None,
@@ -87,58 +92,63 @@ pub fn filter_events(
     for event in events.iter() {
         log::debug!(target: "file_change", "file change event: {:?}", event);
 
-        let simple_kind = get_relevant_event_kind(&event.event.kind);
-        if simple_kind.is_none() {
-            continue;
-        }
-
-        // We currently only handle notify events that report a single path per event.
-        if event.event.paths.len() != 1 {
-            log::error!(
-                "Skipping unsupported file system event with multiple paths: {:?}",
-                event.event.kind
-            );
-            continue;
-        }
-        let path = event.event.paths[0].clone();
-
-        // Since we debounce things, some files might already not exist anymore by the
-        // time we get to them. Of course, if this was a removal event, the path won't
-        // exist, but we do want to consider it meaningful.
-        if let Some(SimpleFileSystemEventKind::Remove) = simple_kind {
+        let path_events = if event.event.kind
+            == EventKind::Modify(ModifyKind::Name(RenameMode::Both))
+            && event.event.paths.len() == 2
+        {
+            vec![
+                (event.event.paths[0].clone(), SimpleFileSystemEventKind::Remove),
+                (event.event.paths[1].clone(), SimpleFileSystemEventKind::Create),
+            ]
+        } else if let Some(simple_kind) = get_relevant_event_kind(&event.event.kind) {
+            if event.event.paths.len() != 1 {
+                log::error!(
+                    "Skipping unsupported file system event with multiple paths: {:?}",
+                    event.event.kind
+                );
+                continue;
+            }
+            vec![(event.event.paths[0].clone(), simple_kind)]
         } else {
-            if !path.exists() {
+            continue;
+        };
+
+        for (path, simple_kind) in path_events {
+            // Since we debounce things, some files might already not exist anymore by the
+            // time we get to them. Of course, if this was a removal event, the path won't
+            // exist, but we do want to consider it meaningful.
+            if simple_kind != SimpleFileSystemEventKind::Remove && !path.exists() {
                 log::debug!(target: "file_change", "skipping file change event because path does not exist");
                 continue;
             }
-        }
 
-        if is_ignored_file(ignored_content_globset, &path) {
-            log::debug!(target: "file_change", "skipping file change event because it is ignored by content globset {:?}", ignored_content_globset);
-            continue;
-        }
+            if is_ignored_file(ignored_content_globset, &path) {
+                log::debug!(target: "file_change", "skipping file change event because it is ignored by content globset {:?}", ignored_content_globset);
+                continue;
+            }
 
-        if is_temp_file(&path) {
-            log::debug!(target: "file_change", "skipping file change event because it is a temp file");
-            continue;
-        }
+            if is_temp_file(&path) {
+                log::debug!(target: "file_change", "skipping file change event because it is a temp file");
+                continue;
+            }
 
-        // We only care about changes in non-empty folders
-        if path.is_dir() && is_folder_empty(&path) {
-            log::debug!(target: "file_change", "skipping file change event because it is an empty dir");
-            continue;
-        }
+            // We only care about changes in non-empty folders
+            if path.is_dir() && is_folder_empty(&path) {
+                log::debug!(target: "file_change", "skipping file change event because it is an empty dir");
+                continue;
+            }
 
-        // Ignore ordinary files peer to config.toml. This assumes all other files we care
-        // about are nested more deeply than config.toml or are directories peer to config.toml.
-        if path != config_path && path.is_file() && path.parent() == config_path.parent() {
-            log::debug!(target: "file_change", "skipping file change event because it is a peer to config.toml");
-            continue;
-        }
+            // Ignore ordinary files peer to config.toml. This assumes all other files we care
+            // about are nested more deeply than config.toml or are directories peer to config.toml.
+            if path != config_path && path.is_file() && path.parent() == config_path.parent() {
+                log::debug!(target: "file_change", "skipping file change event because it is a peer to config.toml");
+                continue;
+            }
 
-        let (change_k, partial_p) = detect_change_kind(root_dir, &path, config_path);
-        log::debug!(target: "file_change", "tracking meaningful file change event: path {:?}, partial_p {:?}, simple_kind {:?}, change_k {:?}", path, partial_p, simple_kind.as_ref().unwrap(), change_k);
-        meaningful_events.insert(path, (partial_p, simple_kind.unwrap(), change_k));
+            let (change_k, partial_p) = detect_change_kind(root_dir, &path, config_path);
+            log::debug!(target: "file_change", "tracking meaningful file change event: path {:?}, partial_p {:?}, simple_kind {:?}, change_k {:?}", path, partial_p, simple_kind, change_k);
+            meaningful_events.insert(path, (partial_p, simple_kind, change_k));
+        }
     }
 
     // Bin changes by change kind to support later iteration over batches of changes.
@@ -192,12 +202,16 @@ fn detect_change_kind(pwd: &Path, path: &Path, config_path: &Path) -> (ChangeKin
 
 #[cfg(test)]
 mod tests {
+    use notify_debouncer_full::DebouncedEvent;
+    use notify_debouncer_full::notify::Event;
     use notify_debouncer_full::notify::event::*;
+    use std::fs;
     use std::path::{Path, PathBuf};
+    use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
     use super::{
-        ChangeKind, SimpleFileSystemEventKind, detect_change_kind, get_relevant_event_kind,
-        is_temp_file,
+        ChangeKind, SimpleFileSystemEventKind, detect_change_kind, filter_events,
+        get_relevant_event_kind, is_temp_file,
     };
 
     // This test makes sure we at least have code coverage on the `notify` event kinds we care
@@ -244,8 +258,12 @@ mod tests {
                 Some(SimpleFileSystemEventKind::Modify),
             ),
             (
+                EventKind::Modify(ModifyKind::Name(RenameMode::From)),
+                Some(SimpleFileSystemEventKind::Remove),
+            ),
+            (
                 EventKind::Modify(ModifyKind::Name(RenameMode::To)),
-                Some(SimpleFileSystemEventKind::Modify),
+                Some(SimpleFileSystemEventKind::Create),
             ),
             (EventKind::Remove(RemoveKind::Any), Some(SimpleFileSystemEventKind::Remove)),
             (EventKind::Remove(RemoveKind::File), Some(SimpleFileSystemEventKind::Remove)),
@@ -256,6 +274,38 @@ mod tests {
             let ek = get_relevant_event_kind(case);
             assert_eq!(ek, *expected, "case: {case:?}");
         }
+    }
+
+    #[test]
+    fn two_path_renames_emit_remove_and_create_changes() {
+        let nonce = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let root =
+            std::env::temp_dir().join(format!("zola-rename-event-{}-{nonce}", std::process::id()));
+        let content = root.join("content");
+        fs::create_dir_all(&content).unwrap();
+        let old_path = content.join("old.md");
+        let new_path = content.join("new.md");
+        fs::write(&new_path, "# New\n").unwrap();
+
+        let event = Event::new(EventKind::Modify(ModifyKind::Name(RenameMode::Both)))
+            .add_path(old_path.clone())
+            .add_path(new_path.clone());
+        let changes = filter_events(
+            vec![DebouncedEvent::new(event, Instant::now())],
+            &root,
+            &root.join("config.toml"),
+            &None,
+        );
+        let content_changes = &changes[&ChangeKind::Content];
+
+        assert!(content_changes.iter().any(|(_, path, kind)| {
+            path == &old_path && *kind == SimpleFileSystemEventKind::Remove
+        }));
+        assert!(content_changes.iter().any(|(_, path, kind)| {
+            path == &new_path && *kind == SimpleFileSystemEventKind::Create
+        }));
+
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
