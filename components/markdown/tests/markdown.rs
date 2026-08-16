@@ -2,6 +2,7 @@ use ahash::AHashMap;
 use config::Config;
 use markdown::{MarkdownContext, render_content};
 use templates::ZOLA_TERA;
+use utils::site::WikilinkResolver;
 use utils::slugs::SlugifyStrategy;
 use utils::types::InsertAnchor;
 
@@ -110,7 +111,7 @@ fn can_customise_anchor_template() {
     let permalinks_ctx = AHashMap::new();
     let config = Config::default_for_test();
     let colocated_assets = AHashMap::new();
-    let wikilinks_ctx = AHashMap::new();
+    let wikilinks_ctx = WikilinkResolver::default();
     let context = MarkdownContext {
         tera: &tera,
         config: &config,
@@ -131,7 +132,7 @@ fn can_customise_summary_template() {
     let mut tera = ZOLA_TERA.clone();
     tera.add_raw_template("summary-cutoff.html", " (in {{ lang }})").unwrap();
     let permalinks_ctx = AHashMap::new();
-    let wikilinks_ctx = AHashMap::new();
+    let wikilinks_ctx = WikilinkResolver::default();
     let config = Config::default_for_test();
     let colocated_assets = AHashMap::new();
     let context = MarkdownContext {

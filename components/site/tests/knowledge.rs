@@ -25,6 +25,9 @@ front_matter = "optional"
 root_index = true
 implicit_sections = true
 {extra_config}
+
+[markdown]
+wikilinks = true
 "#
         ),
     )
@@ -61,4 +64,48 @@ fn rejects_two_root_section_documents() {
     let mut site = Site::new(root.path(), "config.toml").unwrap();
     let error = site.load().unwrap_err();
     assert!(format!("{error:#}").contains("defined by both `index.md` and `_index.md`"));
+}
+
+#[test]
+fn resolves_source_relative_paths_aliases_and_backlinks() {
+    let root = knowledge_site("");
+    fs::write(root.path().join("content/index.md"), "[[guides/alpha|Alpha]]\n").unwrap();
+    fs::write(
+        root.path().join("content/guides/alpha.md"),
+        "---\naliases: [/old-alpha/]\n---\n[[./beta#details|Details]]\n",
+    )
+    .unwrap();
+    fs::write(
+        root.path().join("content/guides/beta.md"),
+        "# Beta\n\n[[old-alpha]]\n\n## Details\n",
+    )
+    .unwrap();
+
+    let mut site = Site::new(root.path(), "config.toml").unwrap();
+    site.load().unwrap();
+    let content = root.path().join("content");
+    let alpha = &site.library.pages[&content.join("guides/alpha.md")];
+    assert_eq!(alpha.internal_links, [("guides/beta.md".to_string(), Some("details".to_string()))]);
+    let beta = &site.library.pages[&content.join("guides/beta.md")];
+    assert_eq!(beta.internal_links, [("guides/alpha.md".to_string(), None)]);
+
+    let alpha_backlinks = &site.library.backlinks["guides/alpha.md"];
+    assert!(alpha_backlinks.contains(&content.join("index.md")));
+    assert!(alpha_backlinks.contains(&content.join("guides/beta.md")));
+}
+
+#[test]
+fn reports_every_candidate_for_an_ambiguous_stem() {
+    let root = knowledge_site("");
+    fs::create_dir_all(root.path().join("content/archive")).unwrap();
+    fs::write(root.path().join("content/guides/duplicate.md"), "# Guide\n").unwrap();
+    fs::write(root.path().join("content/archive/duplicate.md"), "# Archive\n").unwrap();
+    fs::write(root.path().join("content/index.md"), "[[duplicate]]\n").unwrap();
+
+    let mut site = Site::new(root.path(), "config.toml").unwrap();
+    let error = site.load().unwrap_err();
+    let message = format!("{error:#}");
+    assert!(message.contains("target is ambiguous"));
+    assert!(message.contains("archive/duplicate.md"));
+    assert!(message.contains("guides/duplicate.md"));
 }

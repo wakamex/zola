@@ -31,6 +31,7 @@ use utils::fs::{
     clean_site_output_folder, copy_directory, copy_file_if_needed, create_directory, create_file,
 };
 use utils::net::get_available_port;
+use utils::site::WikilinkResolver;
 use utils::types::InsertAnchor;
 
 pub static SITE_CONTENT: LazyLock<Arc<RwLock<AHashMap<RelativePathBuf, String>>>> =
@@ -69,7 +70,7 @@ pub struct Site {
     /// A map of filename stems (with the full relative path and also without when possible)
     /// to relative path for wikilink resolution
     /// Built from the permalinks field
-    pub wikilinks: AHashMap<String, String>,
+    pub wikilinks: WikilinkResolver,
     /// Contains all pages and sections of the site
     pub library: Arc<Library>,
     /// Pre-serialized render cache
@@ -116,7 +117,7 @@ impl Site {
             templates_path,
             taxonomies: Vec::new(),
             permalinks: AHashMap::new(),
-            wikilinks: AHashMap::new(),
+            wikilinks: WikilinkResolver::default(),
             include_drafts: false,
             // We will allocate it properly later on
             library: Arc::new(Library::default()),
@@ -749,9 +750,9 @@ impl Site {
 
     fn build_wikilinks(&mut self) {
         if self.config.markdown.wikilinks {
-            self.wikilinks = build_wikilinks(&self.permalinks);
+            self.wikilinks = build_wikilinks(&self.library, &self.config);
         } else {
-            self.wikilinks.clear();
+            self.wikilinks = WikilinkResolver::default();
         }
     }
 

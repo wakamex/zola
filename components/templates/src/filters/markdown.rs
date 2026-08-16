@@ -3,6 +3,7 @@ use config::Config;
 use markdown::{MarkdownContext, render_content};
 use tera::value::Key;
 use tera::{Error, Filter, Kwargs, State, TeraResult, Value};
+use utils::site::WikilinkResolver;
 use utils::types::InsertAnchor;
 
 #[derive(Debug, Default)]
@@ -10,7 +11,7 @@ pub struct MarkdownFilter {
     config: Config,
     permalinks: AHashMap<String, String>,
     colocated_assets: AHashMap<String, (String, String)>,
-    wikilinks: AHashMap<String, String>,
+    wikilinks: WikilinkResolver,
     tera: tera::Tera,
 }
 
@@ -19,7 +20,7 @@ impl MarkdownFilter {
         config: Config,
         permalinks: AHashMap<String, String>,
         colocated_assets: AHashMap<String, (String, String)>,
-        wikilinks: AHashMap<String, String>,
+        wikilinks: WikilinkResolver,
         tera: tera::Tera,
     ) -> Self {
         Self { config, permalinks, colocated_assets, wikilinks, tera }
@@ -99,6 +100,7 @@ mod tests {
     use giallo::DataAttrPosition;
     use insta::assert_snapshot;
     use tera::{Context, Filter, Kwargs, State, Value};
+    use utils::site::WikilinkResolver;
 
     use super::MarkdownFilter;
 
@@ -118,7 +120,7 @@ mod tests {
             Config::default(),
             AHashMap::new(),
             AHashMap::new(),
-            AHashMap::new(),
+            WikilinkResolver::default(),
             tera::Tera::default(),
         )
         .call("# Hey", kwargs, &state);
@@ -136,7 +138,7 @@ mod tests {
             Config::default(),
             AHashMap::new(),
             AHashMap::new(),
-            AHashMap::new(),
+            WikilinkResolver::default(),
             tera::Tera::default(),
         )
         .call("Using `map`, `filter`, and `fold` instead of `for`", kwargs, &state);
@@ -158,7 +160,7 @@ mod tests {
             Config::default(),
             AHashMap::new(),
             AHashMap::new(),
-            AHashMap::new(),
+            WikilinkResolver::default(),
             tera::Tera::default(),
         )
         .call(
@@ -203,7 +205,7 @@ mod tests {
             config.clone(),
             AHashMap::new(),
             AHashMap::new(),
-            AHashMap::new(),
+            WikilinkResolver::default(),
             tera::Tera::default(),
         )
         .call(md, kwargs, &state);
@@ -219,7 +221,7 @@ mod tests {
             config,
             AHashMap::new(),
             AHashMap::new(),
-            AHashMap::new(),
+            WikilinkResolver::default(),
             tera::Tera::default(),
         )
         .call(md, kwargs, &state);
@@ -246,7 +248,7 @@ mod tests {
             Config::default(),
             permalinks,
             colocated_assets.clone(),
-            AHashMap::new(),
+            WikilinkResolver::default(),
             tera::Tera::default(),
         )
         .call(md, kwargs, &state);
