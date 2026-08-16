@@ -99,7 +99,14 @@ fn parse_datetime(d: &str) -> Option<OffsetDateTime> {
 
 impl PageFrontMatter {
     pub fn parse(raw: &RawFrontMatter) -> Result<PageFrontMatter> {
-        let mut f: PageFrontMatter = raw.deserialize()?;
+        Self::parse_with_taxonomy_shorthand(raw, &[])
+    }
+
+    pub fn parse_with_taxonomy_shorthand(
+        raw: &RawFrontMatter,
+        taxonomies: &[String],
+    ) -> Result<PageFrontMatter> {
+        let mut f: PageFrontMatter = raw.deserialize_page(taxonomies)?;
 
         if let Some(ref slug) = f.slug
             && slug.is_empty()

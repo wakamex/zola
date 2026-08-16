@@ -6,4 +6,4 @@ mod split;
 
 pub use page::PageFrontMatter;
 pub use section::SectionFrontMatter;
-pub use split::{split_page_content, split_section_content};
+pub use split::{split_page_content_with_config, split_section_content_with_config};

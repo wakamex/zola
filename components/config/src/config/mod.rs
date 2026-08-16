@@ -1,3 +1,4 @@
+pub mod content;
 pub mod languages;
 pub mod link_checker;
 pub mod markup;
@@ -72,6 +73,9 @@ pub struct Config {
     pub taxonomy_root: Option<String>,
     /// The default author for pages.
     pub author: Option<String>,
+
+    /// Content loading and publication behavior.
+    pub content: content::Content,
 
     /// Whether to compile the `sass` directory and output the css files into the static folder
     pub compile_sass: bool,
@@ -467,6 +471,7 @@ impl Default for Config {
             taxonomies: Vec::new(),
             taxonomy_root: None,
             author: None,
+            content: content::Content::default(),
             compile_sass: false,
             minify_html: false,
             mode: Mode::Build,
@@ -496,6 +501,29 @@ impl Default for Config {
 mod tests {
     use super::*;
     use utils::slugs::SlugifyStrategy;
+
+    #[test]
+    fn content_loading_defaults_remain_strict() {
+        let config = Config::default();
+        assert_eq!(config.content.front_matter, content::FrontMatterMode::Required);
+        assert!(!config.content.taxonomy_shorthand);
+    }
+
+    #[test]
+    fn can_enable_knowledge_content_loading() {
+        let config = Config::parse(
+            r#"
+base_url = "https://example.com"
+
+[content]
+front_matter = "optional"
+taxonomy_shorthand = true
+"#,
+        )
+        .unwrap();
+        assert_eq!(config.content.front_matter, content::FrontMatterMode::Optional);
+        assert!(config.content.taxonomy_shorthand);
+    }
 
     #[test]
     fn can_add_default_language_with_data_only_at_base_section() {
