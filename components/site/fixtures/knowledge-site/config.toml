@@ -1,0 +1,21 @@
+base_url = "https://knowledge.example"
+compile_sass = false
+build_search_index = false
+generate_sitemap = false
+generate_robots_txt = false
+taxonomies = [{ name = "tags", feed = false }]
+ignored_content = ["private", "scratch"]
+skip_content_templating = ["raw/**"]
+
+[content]
+front_matter = "optional"
+taxonomy_shorthand = true
+root_index = true
+implicit_sections = true
+asset_include = ["**/*.pdf", "**/*.mp4"]
+max_file_size = 24000000
+
+[markdown]
+wikilinks = true
+hard_breaks = true
+

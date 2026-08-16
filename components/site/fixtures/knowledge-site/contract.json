@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "routes": {
+    "index.md": "/",
+    "guides/alpha.md": "/guides/alpha/",
+    "guides/beta.md": "/guides/beta/",
+    "guides/duplicate.md": "/guides/duplicate/",
+    "archive/duplicate.md": "/archive/duplicate/",
+    "bundles/example/index.md": "/bundles/example/",
+    "raw/transcript.md": "/raw/transcript/"
+  },
+  "sections": {
+    "index.md": { "kind": "explicit", "route": "/" },
+    "guides": { "kind": "implicit", "route": "/guides/" },
+    "archive": { "kind": "implicit", "route": "/archive/" },
+    "bundles": { "kind": "implicit", "route": "/bundles/" },
+    "raw": { "kind": "implicit", "route": "/raw/" }
+  },
+  "links": [
+    { "source": "index.md", "target": "guides/alpha.md", "syntax": "root", "fragment": null },
+    { "source": "guides/alpha.md", "target": "guides/beta.md", "syntax": "relative", "fragment": "details" },
+    { "source": "guides/beta.md", "target": "guides/alpha.md", "syntax": "alias", "fragment": null },
+    { "source": "raw/transcript.md", "target": "guides/beta.md", "syntax": "stem", "fragment": null }
+  ],
+  "backlinks": {
+    "guides/alpha.md": ["guides/beta.md", "index.md"],
+    "guides/beta.md": ["guides/alpha.md", "raw/transcript.md"]
+  },
+  "taxonomies": {
+    "guides/alpha.md": { "tags": ["evidence", "person"] },
+    "guides/beta.md": { "tags": ["evidence"] }
+  },
+  "publication": {
+    "content/index.md": "page",
+    "content/guides/alpha.md": "page",
+    "content/guides/source.pdf": "asset",
+    "content/guides/rejected.db": "excluded_asset",
+    "content/private/secret.md": "ignored",
+    "content/scratch/note.md": "ignored",
+    "content/drafts/hidden.md": "draft"
+  },
+  "errors": {
+    "ambiguous-stem": "ambiguous",
+    "broken-link": "missing",
+    "duplicate-taxonomy": "front_matter",
+    "malformed-frontmatter": "front_matter",
+    "root-escape": "invalid_target",
+    "route-collision": "collision"
+  },
+  "literal_wikilinks": [
+    "`[[not-a-link]]`",
+    "```text\n[[not-a-link]]\n```"
+  ]
+}
+
