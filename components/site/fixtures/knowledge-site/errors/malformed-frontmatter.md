@@ -1,0 +1,2 @@
+---
+title: Missing closing delimiter
