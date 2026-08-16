@@ -5,6 +5,7 @@ use config::Config;
 use errors::Result;
 use markdown::{MarkdownContext, Rendered, render_content};
 use templates::ZOLA_TERA;
+use utils::site::{WikilinkResolver, WikilinkTarget};
 use utils::types::InsertAnchor;
 
 fn configurable_render(
@@ -20,10 +21,21 @@ fn configurable_render(
         ("about.md".to_owned(), "https://getzola.org/about/".to_owned()),
     ]);
 
-    let wikilinks = AHashMap::from_iter([
-        ("guides/quickstart".to_owned(), "guides/quickstart.md".to_owned()),
-        ("quickstart".to_owned(), "guides/quickstart.md".to_owned()),
-        ("about".to_owned(), "about.md".to_owned()),
+    let wikilinks = WikilinkResolver::from_targets([
+        WikilinkTarget {
+            source_path: "guides/quickstart.md".to_owned(),
+            identity: "guides/quickstart".to_owned(),
+            permalink: "https://getzola.org/guides/quickstart/".to_owned(),
+            aliases: Vec::new(),
+            lang: "en".to_owned(),
+        },
+        WikilinkTarget {
+            source_path: "about.md".to_owned(),
+            identity: "about".to_owned(),
+            permalink: "https://getzola.org/about/".to_owned(),
+            aliases: Vec::new(),
+            lang: "en".to_owned(),
+        },
     ]);
 
     tera.register_filter(

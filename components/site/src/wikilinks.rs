@@ -1,74 +1,67 @@
-use std::path::Path;
+use config::Config;
+use content::Library;
+use utils::site::{WikilinkResolver, WikilinkTarget};
 
-use ahash::AHashMap;
-
-/// Build a lookup map from permalinks for wikilink resolution.
-///
-/// For each entry in `permalinks` (relative_path -> permalink), we insert 2 things pointing to the full relative path.:
-/// 1. Full path without extension (eg `docs/overview`)
-/// 2. Bare stem (eg `overview`) if different from full path
-///
-/// If a stem is the same as the full path, the stem is ignored
-/// If a stem collides (multiple pages share it, eg _index in Zola), it won't be inserted and users
-/// can't refer to that stem in links.
-pub fn build_wikilinks(permalinks: &AHashMap<String, String>) -> AHashMap<String, String> {
-    let mut wikilinks = AHashMap::new();
-    let mut stems: AHashMap<String, Vec<&str>> = AHashMap::new();
-
-    for relative_path in permalinks.keys() {
-        let without_ext = relative_path.trim_end_matches(".md");
-        wikilinks.insert(without_ext.to_owned(), relative_path.clone());
-
-        let stem =
-            Path::new(without_ext).file_name().unwrap_or_default().to_string_lossy().into_owned();
-        if stem != without_ext {
-            stems.entry(stem).or_default().push(relative_path);
-        }
+fn identity(source_path: &str, lang: &str, default_lang: &str) -> String {
+    let without_extension = source_path.strip_suffix(".md").unwrap_or(source_path);
+    if lang != default_lang {
+        without_extension.strip_suffix(&format!(".{lang}")).unwrap_or(without_extension).to_string()
+    } else {
+        without_extension.to_string()
     }
+}
 
-    for (stem, md_paths) in &stems {
-        // Don't overwrite a full-path entry with a bare stem
-        if wikilinks.contains_key(stem) {
-            continue;
+pub fn build_wikilinks(library: &Library, config: &Config) -> WikilinkResolver {
+    let pages = library.pages.values().filter(|page| page.meta.render).map(|page| WikilinkTarget {
+        source_path: page.file.relative.clone(),
+        identity: identity(&page.file.relative, &page.lang, &config.default_language),
+        permalink: page.permalink.clone(),
+        aliases: page.meta.aliases.clone(),
+        lang: page.lang.clone(),
+    });
+    let sections = library.sections.values().filter(|section| section.meta.render).map(|section| {
+        WikilinkTarget {
+            source_path: section.file.relative.clone(),
+            identity: identity(&section.file.relative, &section.lang, &config.default_language),
+            permalink: section.permalink.clone(),
+            aliases: section.meta.aliases.clone(),
+            lang: section.lang.clone(),
         }
-        if md_paths.len() == 1 {
-            wikilinks.insert(stem.clone(), md_paths[0].to_owned());
-        } else {
-            log::warn!("Multiple files with the name `{stem}`, use the full path to link to them");
-        }
-    }
-
-    wikilinks
+    });
+    WikilinkResolver::from_targets(pages.chain(sections))
 }
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
+    use content::{Library, Page, PageFrontMatter};
+
     use super::*;
 
     #[test]
-    fn build_wikilinks_lookups() {
-        let permalinks = AHashMap::from_iter([
-            ("blog/overview.md".to_string(), "/blog/overview/".to_string()),
-            ("docs/overview.md".to_string(), "/docs/overview/".to_string()),
-            ("about.md".to_string(), "/about/".to_string()),
-            ("blog/_index.md".to_string(), "/blog/".to_string()),
-            ("_index.md".to_string(), "/".to_string()),
-            ("guides/quickstart.md".to_string(), "/guides/quickstart/".to_string()),
-        ]);
-        let wl = build_wikilinks(&permalinks);
+    fn builds_records_from_published_library_content() {
+        let config = Config::default_for_test();
+        let mut library = Library::new(&config);
+        let mut page = Page::new(
+            Path::new("content/guides/quickstart.md"),
+            PageFrontMatter::default(),
+            Path::new(""),
+        );
+        page.file.relative = "guides/quickstart.md".to_string();
+        page.lang = "en".to_string();
+        page.permalink = "/guides/quickstart/".to_string();
+        page.meta.aliases = vec!["start".to_string()];
+        library.insert_page(page);
 
-        // Full paths always resolve
-        assert_eq!(wl.get("blog/overview"), Some(&"blog/overview.md".to_string()));
-        assert_eq!(wl.get("docs/overview"), Some(&"docs/overview.md".to_string()));
-        assert_eq!(wl.get("about"), Some(&"about.md".to_string()));
-        assert_eq!(wl.get("blog/_index"), Some(&"blog/_index.md".to_string()));
-        assert_eq!(wl.get("_index"), Some(&"_index.md".to_string()));
-        assert_eq!(wl.get("guides/quickstart"), Some(&"guides/quickstart.md".to_string()));
-        assert_eq!(wl.get("quickstart"), Some(&"guides/quickstart.md".to_string()));
-        assert_eq!(wl.get("overview"), None);
-        // not blog/_index.md, relative path has precedence over stem
-        assert_eq!(wl.get("_index"), Some(&"_index.md".to_string()));
-        // Relative path and stem being equal should only be inserted once
-        assert_eq!(wl.values().filter(|v| *v == "about.md").count(), 1);
+        let resolver = build_wikilinks(&library, &config);
+        assert_eq!(
+            resolver.resolve("index.md", "en", "en", "quickstart").unwrap().md_path,
+            "guides/quickstart.md"
+        );
+        assert_eq!(
+            resolver.resolve("index.md", "en", "en", "start").unwrap().md_path,
+            "guides/quickstart.md"
+        );
     }
 }

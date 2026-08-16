@@ -11,6 +11,7 @@ use errors::{Context as _, Result};
 use markdown::MarkdownContext;
 use render::Renderer;
 use utils::net::is_external_link;
+use utils::site::WikilinkResolver;
 use utils::types::InsertAnchor;
 
 #[inline]
@@ -27,7 +28,7 @@ pub fn render_page(
     renderer: Renderer,
     permalinks: &AHashMap<String, String>,
     colocated_assets: &AHashMap<String, (String, String)>,
-    wikilinks: &AHashMap<String, String>,
+    wikilinks: &WikilinkResolver,
     tera: &Tera,
     config: &Config,
     insert_anchor: InsertAnchor,
@@ -71,7 +72,7 @@ pub fn render_section(
     renderer: Renderer,
     permalinks: &AHashMap<String, String>,
     colocated_assets: &AHashMap<String, (String, String)>,
-    wikilinks: &AHashMap<String, String>,
+    wikilinks: &WikilinkResolver,
     tera: &Tera,
     config: &Config,
 ) -> Result<()> {
@@ -124,6 +125,7 @@ mod tests {
     use std::path::Path;
     use std::path::PathBuf;
     use templates::ZOLA_TERA;
+    use utils::site::WikilinkResolver;
     use utils::types::InsertAnchor;
 
     use super::render_page;
@@ -156,7 +158,7 @@ Hello world
             renderer,
             &AHashMap::default(),
             &AHashMap::default(),
-            &AHashMap::default(),
+            &WikilinkResolver::default(),
             &ZOLA_TERA,
             &config,
             InsertAnchor::None,
@@ -196,7 +198,7 @@ And here's another. [^3]
             renderer,
             &AHashMap::default(),
             &AHashMap::default(),
-            &AHashMap::default(),
+            &WikilinkResolver::default(),
             &ZOLA_TERA,
             &config,
             InsertAnchor::None,
@@ -234,7 +236,7 @@ And here's another. [^3]
             renderer,
             &AHashMap::default(),
             &AHashMap::default(),
-            &AHashMap::default(),
+            &WikilinkResolver::default(),
             &ZOLA_TERA,
             &config,
             InsertAnchor::None,
