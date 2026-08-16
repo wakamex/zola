@@ -5,7 +5,7 @@ use unicode_segmentation::UnicodeSegmentation;
 use walkdir::WalkDir;
 
 use config::Config;
-use utils::fs::is_temp_file;
+use utils::fs::{is_dotfile, is_temp_file};
 use utils::table_of_contents::Heading;
 
 pub fn has_anchor(headings: &[Heading], anchor: &str) -> bool {
@@ -27,7 +27,12 @@ pub fn has_anchor(headings: &[Heading], anchor: &str) -> bool {
 /// only be set when finding page assets currently.
 /// TODO: remove this flag once sections with assets behave the same as pages with assets
 /// The returned vector with assets is sorted in case-sensitive order (using `to_ascii_lowercase()`)
-pub fn find_related_assets(path: &Path, config: &Config, recursive: bool) -> Vec<PathBuf> {
+pub fn find_related_assets(
+    path: &Path,
+    content_path: &Path,
+    config: &Config,
+    recursive: bool,
+) -> Vec<PathBuf> {
     let mut assets = vec![];
 
     let mut builder = WalkDir::new(path).follow_links(true);
@@ -37,7 +42,7 @@ pub fn find_related_assets(path: &Path, config: &Config, recursive: bool) -> Vec
     for entry in builder.into_iter().filter_map(std::result::Result::ok) {
         let entry_path = entry.path();
 
-        if entry_path.is_file() && !is_temp_file(entry_path) {
+        if entry_path.is_file() && !is_dotfile(entry_path) && !is_temp_file(entry_path) {
             match entry_path.extension() {
                 Some(e) => match e.to_str() {
                     Some("md") => continue,
@@ -54,13 +59,8 @@ pub fn find_related_assets(path: &Path, config: &Config, recursive: bool) -> Vec
 
     if config.content.asset_include.is_some() {
         assets.retain(|path| {
-            let components = path.components().collect::<Vec<_>>();
-            let relative = components
-                .iter()
-                .rposition(|component| component.as_os_str() == "content")
-                .map(|position| components[position + 1..].iter().collect::<PathBuf>())
-                .unwrap_or_else(|| path.to_path_buf());
-            config.content.is_asset_allowed(&relative)
+            path.strip_prefix(content_path)
+                .is_ok_and(|relative| config.content.is_asset_allowed(relative))
         });
     }
 
@@ -208,7 +208,7 @@ mod tests {
         fs::File::create(path.join("GRAPH.txt")).unwrap();
         fs::File::create(path.join("subdir").join("GGG.txt")).unwrap();
 
-        let assets = find_related_assets(path, &Config::default(), true);
+        let assets = find_related_assets(path, path, &Config::default(), true);
         assert_eq!(assets.len(), 7);
         assert_eq!(assets.iter().filter(|p| p.extension().unwrap_or_default() != "md").count(), 7);
 
@@ -248,7 +248,7 @@ mod tests {
         fs::File::create(path.join("GRAPH.txt")).unwrap();
         fs::File::create(path.join("subdir").join("GGG.txt")).unwrap();
 
-        let assets = find_related_assets(path, &Config::default(), false);
+        let assets = find_related_assets(path, path, &Config::default(), false);
         assert_eq!(assets.len(), 5);
         assert_eq!(assets.iter().filter(|p| p.extension().unwrap_or_default() != "md").count(), 5);
 

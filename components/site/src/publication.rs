@@ -62,7 +62,7 @@ fn section_output_base(site: &Site, lang: &str, components: &[String]) -> PathBu
 
 pub fn build(site: &Site) -> PublicationManifest {
     let mut asset_outputs = AHashMap::new();
-    for page in site.library.pages.values() {
+    for page in site.library.pages.values().filter(|page| page.meta.render) {
         let base = PathBuf::from(page.path.trim_start_matches('/'));
         for asset in &page.assets {
             if let Ok(relative) = asset.strip_prefix(page.file.path.parent().unwrap()) {
@@ -164,17 +164,34 @@ pub fn build(site: &Site) -> PublicationManifest {
 
         if path.extension().is_some_and(|extension| extension == "md") {
             if let Some(page) = site.library.pages.get(path) {
-                entries.push(PublicationEntry {
-                    source_path: content_source(relative),
-                    kind: "page",
-                    state: "published",
-                    rule: "markdown",
-                    route: Some(page.path.clone()),
-                    output_path: Some(format!("{}index.html", page.path.trim_start_matches('/'))),
-                    aliases: page.meta.aliases.clone(),
-                    draft: page.meta.draft,
-                    bytes,
-                });
+                if page.meta.render {
+                    entries.push(PublicationEntry {
+                        source_path: content_source(relative),
+                        kind: "page",
+                        state: "published",
+                        rule: "markdown",
+                        route: Some(page.path.clone()),
+                        output_path: Some(format!(
+                            "{}index.html",
+                            page.path.trim_start_matches('/')
+                        )),
+                        aliases: page.meta.aliases.clone(),
+                        draft: page.meta.draft,
+                        bytes,
+                    });
+                } else {
+                    entries.push(PublicationEntry {
+                        source_path: content_source(relative),
+                        kind: "page",
+                        state: "excluded",
+                        rule: "render_false",
+                        route: None,
+                        output_path: None,
+                        aliases: page.meta.aliases.clone(),
+                        draft: page.meta.draft,
+                        bytes,
+                    });
+                }
             } else if let Some(section) = site.library.sections.get(path) {
                 let rule = if section.file.components.is_empty()
                     && site.config.content.root_index
@@ -184,20 +201,34 @@ pub fn build(site: &Site) -> PublicationManifest {
                 } else {
                     "explicit_section"
                 };
-                entries.push(PublicationEntry {
-                    source_path: content_source(relative),
-                    kind: "section",
-                    state: "published",
-                    rule,
-                    route: Some(section.path.clone()),
-                    output_path: Some(format!(
-                        "{}index.html",
-                        section.path.trim_start_matches('/')
-                    )),
-                    aliases: section.meta.aliases.clone(),
-                    draft: section.meta.draft,
-                    bytes,
-                });
+                if section.meta.render {
+                    entries.push(PublicationEntry {
+                        source_path: content_source(relative),
+                        kind: "section",
+                        state: "published",
+                        rule,
+                        route: Some(section.path.clone()),
+                        output_path: Some(format!(
+                            "{}index.html",
+                            section.path.trim_start_matches('/')
+                        )),
+                        aliases: section.meta.aliases.clone(),
+                        draft: section.meta.draft,
+                        bytes,
+                    });
+                } else {
+                    entries.push(PublicationEntry {
+                        source_path: content_source(relative),
+                        kind: "section",
+                        state: "excluded",
+                        rule: "render_false",
+                        route: None,
+                        output_path: None,
+                        aliases: section.meta.aliases.clone(),
+                        draft: section.meta.draft,
+                        bytes,
+                    });
+                }
             } else {
                 entries.push(PublicationEntry {
                     source_path: content_source(relative),

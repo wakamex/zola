@@ -185,7 +185,7 @@ impl Page {
 
         if page.file.name == "index" {
             let parent_dir = path.parent().unwrap();
-            page.assets = find_related_assets(parent_dir, config, true);
+            page.assets = find_related_assets(parent_dir, &base_path.join("content"), config, true);
             page.serialized_assets = page.serialize_assets(base_path);
             if let Some(colocated_path) = page.file.colocated_path.as_ref()
                 && !page.assets.is_empty()
