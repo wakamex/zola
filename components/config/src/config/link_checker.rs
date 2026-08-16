@@ -26,6 +26,8 @@ pub struct LinkChecker {
     pub external_level: LinkCheckerLevel,
     /// A list of file glob patterns to skip link checking on
     pub ignored_files: Vec<String>,
+    /// Missing wikilink targets that are intentional forward links, as normalized content paths.
+    pub allowed_missing_wikilinks: Vec<String>,
     #[serde(skip_serializing, skip_deserializing)] // not a typo, 2 are needed
     pub ignored_files_globset: Option<GlobSet>,
 }

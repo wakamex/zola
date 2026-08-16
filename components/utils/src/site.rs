@@ -10,12 +10,14 @@ pub struct WikilinkTarget {
     pub permalink: String,
     pub aliases: Vec<String>,
     pub lang: String,
+    pub track_backlink: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ResolvedWikilink {
     pub md_path: String,
     pub permalink: String,
+    pub track_backlink: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -114,6 +116,7 @@ impl WikilinkResolver {
                 Ok(ResolvedWikilink {
                     md_path: target.source_path.clone(),
                     permalink: target.permalink.clone(),
+                    track_backlink: target.track_backlink,
                 })
             }
             _ => {
@@ -135,14 +138,7 @@ impl WikilinkResolver {
         default_lang: &str,
         target: &str,
     ) -> std::result::Result<ResolvedWikilink, WikilinkError> {
-        let is_relative = target.starts_with("./") || target.starts_with("../");
-        let is_bare = !is_relative && !target.trim_matches('/').contains('/');
-        let normalized = if is_relative {
-            let source_parent = source_path.rsplit_once('/').map_or("", |(parent, _)| parent);
-            normalize_path(&format!("{source_parent}/{target}"))?
-        } else {
-            normalize_path(target)?
-        };
+        let (normalized, is_bare) = Self::normalize_target(source_path, target)?;
 
         if let Some(candidates) = self.paths.get(&normalized) {
             return self.select(candidates, current_lang, default_lang);
@@ -154,6 +150,21 @@ impl WikilinkResolver {
             return self.select(candidates, current_lang, default_lang);
         }
         Err(WikilinkError::Missing)
+    }
+
+    pub fn normalize_target(
+        source_path: &str,
+        target: &str,
+    ) -> std::result::Result<(String, bool), WikilinkError> {
+        let is_relative = target.starts_with("./") || target.starts_with("../");
+        let is_bare = !is_relative && !target.trim_matches('/').contains('/');
+        let normalized = if is_relative {
+            let source_parent = source_path.rsplit_once('/').map_or("", |(parent, _)| parent);
+            normalize_path(&format!("{source_parent}/{target}"))?
+        } else {
+            normalize_path(target)?
+        };
+        Ok((normalized, is_bare))
     }
 }
 
@@ -210,6 +221,7 @@ mod tests {
                 permalink: "/guides/alpha/".to_string(),
                 aliases: vec!["legacy-alpha".to_string()],
                 lang: "en".to_string(),
+                track_backlink: true,
             },
             WikilinkTarget {
                 source_path: "old-alpha.md".to_string(),
@@ -217,6 +229,7 @@ mod tests {
                 permalink: "/old-alpha/".to_string(),
                 aliases: Vec::new(),
                 lang: "en".to_string(),
+                track_backlink: true,
             },
             WikilinkTarget {
                 source_path: "guides/beta.md".to_string(),
@@ -224,6 +237,7 @@ mod tests {
                 permalink: "/guides/beta/".to_string(),
                 aliases: Vec::new(),
                 lang: "en".to_string(),
+                track_backlink: true,
             },
             WikilinkTarget {
                 source_path: "guides/duplicate.md".to_string(),
@@ -231,6 +245,7 @@ mod tests {
                 permalink: "/guides/duplicate/".to_string(),
                 aliases: Vec::new(),
                 lang: "en".to_string(),
+                track_backlink: true,
             },
             WikilinkTarget {
                 source_path: "archive/duplicate.md".to_string(),
@@ -238,6 +253,7 @@ mod tests {
                 permalink: "/archive/duplicate/".to_string(),
                 aliases: Vec::new(),
                 lang: "en".to_string(),
+                track_backlink: true,
             },
             WikilinkTarget {
                 source_path: "guides/alpha.fr.md".to_string(),
@@ -245,6 +261,7 @@ mod tests {
                 permalink: "/fr/guides/alpha/".to_string(),
                 aliases: vec!["ancien-alpha".to_string()],
                 lang: "fr".to_string(),
+                track_backlink: true,
             },
         ])
     }
@@ -317,6 +334,61 @@ mod tests {
             resolver.resolve("guides/page.md", "en", "en", "../../outside"),
             Err(WikilinkError::InvalidTarget { .. })
         ));
+    }
+
+    #[test]
+    fn wikilink_path_normalization_holds_for_generated_component_sequences() {
+        let components = ["alpha", "beta", "δelta", ".", "", ".."];
+
+        for mut state in 0_u64..4096 {
+            let mut path = String::new();
+            let mut expected = Vec::new();
+            let mut escaped = false;
+
+            for _ in 0..12 {
+                state = state.wrapping_mul(6364136223846793005).wrapping_add(1);
+                let component = components[(state as usize) % components.len()];
+                if !path.is_empty() {
+                    path.push('/');
+                }
+                path.push_str(component);
+
+                match component {
+                    "" | "." => {}
+                    ".." if expected.pop().is_none() => escaped = true,
+                    ".." => {}
+                    value => expected.push(value),
+                }
+            }
+
+            let result = normalize_path(&path);
+            if escaped || expected.is_empty() {
+                assert!(matches!(result, Err(WikilinkError::InvalidTarget { .. })), "{path}");
+            } else {
+                assert_eq!(result.unwrap(), expected.join("/"), "{path}");
+            }
+        }
+
+        for target in ["alpha", "δelta/path", "../outside", "alpha.md"] {
+            for byte_index in target.char_indices().map(|(index, _)| index).chain([target.len()]) {
+                let mut with_backslash = target.to_string();
+                with_backslash.insert(byte_index, '\\');
+                assert!(matches!(
+                    normalize_path(&with_backslash),
+                    Err(WikilinkError::InvalidTarget { .. })
+                ));
+            }
+        }
+
+        for parent_depth in 0..64 {
+            let path = format!("{}outside", "../".repeat(parent_depth));
+            let result = normalize_path(&path);
+            if parent_depth == 0 {
+                assert_eq!(result.unwrap(), "outside");
+            } else {
+                assert!(matches!(result, Err(WikilinkError::InvalidTarget { .. })), "{path}");
+            }
+        }
     }
 
     #[test]

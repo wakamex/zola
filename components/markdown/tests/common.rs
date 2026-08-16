@@ -28,6 +28,7 @@ fn configurable_render(
             permalink: "https://getzola.org/guides/quickstart/".to_owned(),
             aliases: Vec::new(),
             lang: "en".to_owned(),
+            track_backlink: true,
         },
         WikilinkTarget {
             source_path: "about.md".to_owned(),
@@ -35,6 +36,7 @@ fn configurable_render(
             permalink: "https://getzola.org/about/".to_owned(),
             aliases: Vec::new(),
             lang: "en".to_owned(),
+            track_backlink: true,
         },
     ]);
 

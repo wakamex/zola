@@ -11,6 +11,8 @@ fn knowledge_site(extra_config: &str) -> TempDir {
     fs::write(root.path().join("templates/page.html"), "{{ page.content | safe }}").unwrap();
     fs::write(root.path().join("templates/section.html"), "{{ section.content | safe }}").unwrap();
     fs::write(root.path().join("templates/index.html"), "{{ section.content | safe }}").unwrap();
+    fs::write(root.path().join("templates/taxonomy_list.html"), "{{ taxonomy.name }}").unwrap();
+    fs::write(root.path().join("templates/taxonomy_single.html"), "{{ term.name }}").unwrap();
     fs::write(root.path().join("templates/404.html"), "Not found").unwrap();
     fs::write(root.path().join("content/index.md"), "# Home\n").unwrap();
     fs::write(root.path().join("content/guides/alpha.md"), "# Alpha\n").unwrap();
@@ -23,6 +25,7 @@ compile_sass = false
 build_search_index = false
 generate_sitemap = false
 generate_robots_txt = false
+taxonomies = [{{ name = "tags", feed = false }}]
 skip_content_templating = ["raw/**"]
 
 [content]
@@ -137,9 +140,20 @@ fn publishes_only_allowlisted_assets_and_reports_the_same_decisions() {
     let root = knowledge_site("asset_include = [\"**/*.pdf\"]");
     fs::write(root.path().join("content/guides/source.pdf"), "published").unwrap();
     fs::write(root.path().join("content/guides/rejected.db"), "excluded").unwrap();
+    fs::write(
+        root.path().join("content/guides/alpha.md"),
+        "+++\n[taxonomies]\ntags = [\"evidence\"]\n+++\n# Alpha\n",
+    )
+    .unwrap();
 
     let mut site = Site::new(root.path(), "config.toml").unwrap();
     site.load().unwrap();
+    let asset = site.wikilinks.resolve("index.md", "en", "en", "guides/source.pdf").unwrap();
+    assert_eq!(asset.permalink, "https://example.com/guides/source.pdf");
+    assert!(!asset.track_backlink);
+    let tag = site.wikilinks.resolve("index.md", "en", "en", "tags/evidence").unwrap();
+    assert_eq!(tag.permalink, "https://example.com/tags/evidence/");
+    assert!(!tag.track_backlink);
     let manifest = site.publication_manifest();
     let published = manifest
         .entries
