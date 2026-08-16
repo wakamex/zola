@@ -137,9 +137,41 @@ fn preserves_raw_html_and_literal_template_source() {
 
 #[test]
 fn publishes_only_allowlisted_assets_and_reports_the_same_decisions() {
-    let root = knowledge_site("asset_include = [\"**/*.pdf\"]");
+    let root = knowledge_site(
+        "asset_include = [\"guides/source.pdf\", \"guides/content/*.pdf\", \"guides/.secret.pdf\", \"unrendered-page/*.pdf\", \"unrendered-section/*.pdf\"]",
+    );
     fs::write(root.path().join("content/guides/source.pdf"), "published").unwrap();
+    fs::write(root.path().join("content/guides/.secret.pdf"), "hidden").unwrap();
     fs::write(root.path().join("content/guides/rejected.db"), "excluded").unwrap();
+    fs::create_dir_all(root.path().join("content/guides/content")).unwrap();
+    fs::write(root.path().join("content/guides/content/nested.pdf"), "nested").unwrap();
+    fs::write(
+        root.path().join("content/guides/unrendered.md"),
+        "+++\nrender = false\n+++\n# Not rendered\n",
+    )
+    .unwrap();
+    fs::create_dir_all(root.path().join("content/unrendered-section")).unwrap();
+    fs::write(
+        root.path().join("content/unrendered-section/_index.md"),
+        "+++\nrender = false\n+++\n# Not rendered\n",
+    )
+    .unwrap();
+    fs::write(
+        root.path().join("content/unrendered-section/section.pdf"),
+        "published with section assets",
+    )
+    .unwrap();
+    fs::create_dir_all(root.path().join("content/unrendered-page")).unwrap();
+    fs::write(
+        root.path().join("content/unrendered-page/index.md"),
+        "+++\nrender = false\n+++\n# Not rendered\n",
+    )
+    .unwrap();
+    fs::write(
+        root.path().join("content/unrendered-page/page.pdf"),
+        "not published without page output",
+    )
+    .unwrap();
     fs::write(
         root.path().join("content/guides/alpha.md"),
         "+++\n[taxonomies]\ntags = [\"evidence\"]\n+++\n# Alpha\n",
@@ -170,10 +202,60 @@ fn publishes_only_allowlisted_assets_and_reports_the_same_decisions() {
         .unwrap();
     assert_eq!(rejected.state, "excluded");
     assert_eq!(rejected.rule, "asset_include");
+    let hidden = manifest
+        .entries
+        .iter()
+        .find(|entry| entry.source_path == "content/guides/.secret.pdf")
+        .unwrap();
+    assert_eq!(hidden.state, "excluded");
+    assert_eq!(hidden.rule, "hidden_file");
+    let nested = manifest
+        .entries
+        .iter()
+        .find(|entry| entry.source_path == "content/guides/content/nested.pdf")
+        .unwrap();
+    assert_eq!(nested.state, "published");
+    assert_eq!(nested.output_path.as_deref(), Some("guides/content/nested.pdf"));
+    for source_path in [
+        "content/guides/unrendered.md",
+        "content/unrendered-page/index.md",
+        "content/unrendered-section/_index.md",
+    ] {
+        let unrendered =
+            manifest.entries.iter().find(|entry| entry.source_path == source_path).unwrap();
+        assert_eq!(unrendered.state, "excluded");
+        assert_eq!(unrendered.rule, "render_false");
+        assert_eq!(unrendered.route, None);
+        assert_eq!(unrendered.output_path, None);
+    }
+    let unrendered_page_asset = manifest
+        .entries
+        .iter()
+        .find(|entry| entry.source_path == "content/unrendered-page/page.pdf")
+        .unwrap();
+    assert_eq!(unrendered_page_asset.state, "excluded");
+    assert_eq!(unrendered_page_asset.rule, "unpublished_content");
+    let unrendered_section_asset = manifest
+        .entries
+        .iter()
+        .find(|entry| entry.source_path == "content/unrendered-section/section.pdf")
+        .unwrap();
+    assert_eq!(unrendered_section_asset.state, "published");
+    assert_eq!(
+        unrendered_section_asset.output_path.as_deref(),
+        Some("unrendered-section/section.pdf")
+    );
 
     site.build().unwrap();
     assert!(root.path().join("public/guides/source.pdf").exists());
+    assert!(root.path().join("public/guides/content/nested.pdf").exists());
+    assert!(!root.path().join("public/guides/.secret.pdf").exists());
     assert!(!root.path().join("public/guides/rejected.db").exists());
+    assert!(!root.path().join("public/guides/unrendered/index.html").exists());
+    assert!(!root.path().join("public/unrendered-page/index.html").exists());
+    assert!(!root.path().join("public/unrendered-page/page.pdf").exists());
+    assert!(!root.path().join("public/unrendered-section/index.html").exists());
+    assert!(root.path().join("public/unrendered-section/section.pdf").exists());
 }
 
 #[test]

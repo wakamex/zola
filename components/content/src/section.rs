@@ -132,7 +132,7 @@ impl Section {
         let mut section = Section::parse(path, &content, config, base_path)?;
 
         let parent_dir = path.parent().unwrap();
-        section.assets = find_related_assets(parent_dir, config, false);
+        section.assets = find_related_assets(parent_dir, &base_path.join("content"), config, false);
         section.serialized_assets = section.serialize_assets();
         if let Some(colocated_path) = section.file.colocated_path.as_ref()
             && !section.assets.is_empty()
@@ -152,7 +152,7 @@ impl Section {
         let mut section = Section::parse(path, "+++\n+++\n", config, base_path)?;
         section.implicit = true;
         let parent_dir = path.parent().unwrap();
-        section.assets = find_related_assets(parent_dir, config, false);
+        section.assets = find_related_assets(parent_dir, &base_path.join("content"), config, false);
         section.serialized_assets = section.serialize_assets();
         if let Some(colocated_path) = section.file.colocated_path.as_ref()
             && !section.assets.is_empty()
