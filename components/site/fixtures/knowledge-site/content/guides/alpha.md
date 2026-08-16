@@ -9,4 +9,3 @@ aliases: [old-alpha]
 See [[./beta#details|Beta details]].
 
 <aside data-fixture="raw-html">Raw HTML remains intact.</aside>
-

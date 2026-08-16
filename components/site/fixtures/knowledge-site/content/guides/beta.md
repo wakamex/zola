@@ -12,4 +12,3 @@ See [[old-alpha]].
 ## Details
 
 The fragment resolves to this heading.
-

@@ -1,3 +1,2 @@
 ---
 title: Missing closing delimiter
-

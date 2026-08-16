@@ -7,4 +7,3 @@ The root document has no frontmatter and links to [[guides/alpha|Alpha]].
 ```text
 [[not-a-link]]
 ```
-

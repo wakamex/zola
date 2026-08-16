@@ -4,4 +4,3 @@ tags: [shorthand]
 taxonomies:
   tags: [canonical]
 ---
-
