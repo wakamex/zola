@@ -13,4 +13,6 @@ pub enum FrontMatterMode {
 pub struct Content {
     pub front_matter: FrontMatterMode,
     pub taxonomy_shorthand: bool,
+    pub root_index: bool,
+    pub implicit_sections: bool,
 }

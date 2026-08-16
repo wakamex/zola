@@ -322,6 +322,20 @@ impl Library {
     /// Find out the direct subsections of each subsection if there are some
     /// as well as the pages for each section
     pub fn populate_sections(&mut self, config: &Config, content_path: &Path) {
+        let root_section_path = |lang: &str, sections: &AHashMap<PathBuf, Section>| {
+            let configured = if lang == config.default_language {
+                content_path.join("index.md")
+            } else {
+                content_path.join(format!("index.{lang}.md"))
+            };
+            if config.content.root_index && sections.contains_key(&configured) {
+                configured
+            } else if lang == config.default_language {
+                content_path.join("_index.md")
+            } else {
+                content_path.join(format!("_index.{lang}.md"))
+            }
+        };
         let mut add_translation = |entry: &Path, path: &Path| {
             if config.is_multilingual() {
                 self.translations
@@ -342,9 +356,13 @@ impl Library {
         for (path, section) in &self.sections {
             hidden_by_relative.insert(section.file.relative.clone(), section.meta.hidden);
             if let Some(ref grand_parent) = section.file.grand_parent {
+                let parent_index = if grand_parent == content_path {
+                    root_section_path(&section.lang, &self.sections)
+                } else {
+                    grand_parent.join(&section.file.filename)
+                };
                 subsections
-                    // Using the original filename to work for multi-lingual sections
-                    .entry(grand_parent.join(&section.file.filename))
+                    .entry(parent_index)
                     .or_insert_with(Vec::new)
                     .push(section.file.path.clone());
             }
@@ -359,7 +377,12 @@ impl Library {
 
             // Index section is the first ancestor of every single section
             let mut cur_path = content_path.to_path_buf();
-            let mut parents = vec![section.file.filename.clone()];
+            let root_path = root_section_path(&section.lang, &self.sections);
+            let mut parents = self
+                .sections
+                .get(&root_path)
+                .map(|root| vec![root.file.relative.clone()])
+                .unwrap_or_default();
             for component in &section.file.components {
                 cur_path = cur_path.join(component);
                 // Skip itself
@@ -367,7 +390,11 @@ impl Library {
                     continue;
                 }
 
-                let index_path = cur_path.join(&section.file.filename);
+                let index_path = if section.lang == config.default_language {
+                    cur_path.join("_index.md")
+                } else {
+                    cur_path.join(format!("_index.{}.md", section.lang))
+                };
                 if let Some(s) = self.sections.get(&index_path) {
                     parents.push(s.file.relative.clone());
                 }
@@ -420,7 +447,11 @@ impl Library {
             }
             let parent_filename = &index_filename_by_lang[&page.lang];
             add_translation(&page.file.canonical, path);
-            let mut parent_section_path = page.file.parent.join(parent_filename);
+            let mut parent_section_path = if page.file.parent == content_path {
+                root_section_path(&page.lang, &self.sections)
+            } else {
+                page.file.parent.join(parent_filename)
+            };
 
             // We've resolved the sections visibility before so we will just take the parent one
             // if hidden is not explicitely set
