@@ -76,6 +76,19 @@ const NOT_FOUND_TEXT: &[u8] = b"Not Found";
 // This is dist/livereload.min.js from the LiveReload.js v3.2.4 release
 const LIVE_RELOAD: &str = include_str!("livereload.js");
 
+fn can_fast_reload_content(
+    event_kind: &SimpleFileSystemEventKind,
+    wikilinks_enabled: bool,
+) -> bool {
+    // A wikilink target-set or graph change can affect pages other than the changed file.
+    // Recreate the site so links and backlinks cannot retain stale resolver state.
+    !wikilinks_enabled && *event_kind != SimpleFileSystemEventKind::Remove
+}
+
+fn allow_output_overwrite(initial_force: bool, rebuilding: bool) -> bool {
+    initial_force || rebuilding
+}
+
 static SERVE_ERROR: Mutex<Cell<Option<(&'static str, Error)>>> = Mutex::new(Cell::new(None));
 
 struct AppState {
@@ -508,6 +521,9 @@ fn create_new_site(
         }
         site.set_output_path(output_dir);
     }
+    if force {
+        site.clean()?;
+    }
     if include_drafts {
         site.include_drafts();
     }
@@ -544,7 +560,7 @@ pub fn serve(
         interface,
         interface_port,
         output_dir,
-        force,
+        allow_output_overwrite(force, false),
         base_url,
         config_file,
         include_drafts,
@@ -753,7 +769,7 @@ pub fn serve(
         interface,
         interface_port,
         output_dir,
-        force,
+        allow_output_overwrite(force, true),
         base_url,
         config_file,
         include_drafts,
@@ -809,8 +825,10 @@ pub fn serve(
                             for (_, full_path, event_kind) in change_group.iter() {
                                 log::info!("-> Content changed {}", full_path.display());
 
-                                let can_do_fast_reload =
-                                    *event_kind != SimpleFileSystemEventKind::Remove;
+                                let can_do_fast_reload = can_fast_reload_content(
+                                    event_kind,
+                                    site.config.markdown.wikilinks,
+                                );
 
                                 if fast_rebuild {
                                     if can_do_fast_reload {
@@ -931,12 +949,84 @@ pub fn serve(
 
 #[cfg(test)]
 mod tests {
-    use super::{construct_url, create_new_site, strip_base_path};
+    use super::{
+        allow_output_overwrite, can_fast_reload_content, construct_url, create_new_site,
+        strip_base_path,
+    };
+    use crate::fs_utils::SimpleFileSystemEventKind;
     use crate::get_config_file_path;
+    use std::fs;
     use std::net::{IpAddr, SocketAddr};
     use std::path::Path;
     use std::str::FromStr;
+    use std::time::{SystemTime, UNIX_EPOCH};
     use url::Url;
+
+    #[test]
+    fn wikilink_content_changes_use_a_graph_safe_full_rebuild() {
+        for event in [
+            SimpleFileSystemEventKind::Create,
+            SimpleFileSystemEventKind::Modify,
+            SimpleFileSystemEventKind::Remove,
+        ] {
+            assert!(!can_fast_reload_content(&event, true));
+        }
+
+        assert!(can_fast_reload_content(&SimpleFileSystemEventKind::Create, false));
+        assert!(can_fast_reload_content(&SimpleFileSystemEventKind::Modify, false));
+        assert!(!can_fast_reload_content(&SimpleFileSystemEventKind::Remove, false));
+    }
+
+    #[test]
+    fn serve_rebuilds_overwrite_the_managed_output_directory() {
+        assert!(!allow_output_overwrite(false, false));
+        assert!(allow_output_overwrite(true, false));
+        assert!(allow_output_overwrite(false, true));
+        assert!(allow_output_overwrite(true, true));
+    }
+
+    #[test]
+    fn forced_site_recreation_removes_stale_output() {
+        let nonce = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let output =
+            std::env::temp_dir().join(format!("zola-serve-rebuild-{}-{nonce}", std::process::id()));
+        let root = Path::new("./test_site").canonicalize().unwrap();
+        let config = root.join("config.toml");
+        let interface = IpAddr::from_str("127.0.0.1").unwrap();
+
+        create_new_site(
+            &root,
+            interface,
+            1111,
+            Some(&output),
+            false,
+            None,
+            &config,
+            false,
+            true,
+            false,
+        )
+        .unwrap();
+        let stale = output.join("stale.html");
+        fs::write(&stale, "stale").unwrap();
+
+        create_new_site(
+            &root,
+            interface,
+            1111,
+            Some(&output),
+            true,
+            None,
+            &config,
+            false,
+            true,
+            false,
+        )
+        .unwrap();
+
+        assert!(!stale.exists());
+        fs::remove_dir_all(output).unwrap();
+    }
 
     #[test]
     fn test_construct_url_base_url_is_slash() {
