@@ -7,7 +7,7 @@ use utils::fs::read_file;
 use utils::table_of_contents::Heading;
 
 use crate::file_info::FileInfo;
-use crate::front_matter::{SectionFrontMatter, split_section_content};
+use crate::front_matter::{SectionFrontMatter, split_section_content_with_config};
 use crate::utils::{find_related_assets, get_colocated_assets, get_reading_analytics, has_anchor};
 
 // Default is used to create a default index section if there is no _index.md in the root content directory
@@ -87,7 +87,7 @@ impl Section {
         config: &Config,
         base_path: &Path,
     ) -> Result<Section> {
-        let (meta, content) = split_section_content(file_path, content)?;
+        let (meta, content) = split_section_content_with_config(file_path, content, config)?;
         let mut section = Section::new(file_path, meta, base_path);
         section.lang = section
             .file

@@ -5,6 +5,7 @@ use std::path::Path;
 
 pub use crate::config::{
     Config,
+    content::{Content, FrontMatterMode},
     languages::LanguageOptions,
     link_checker::LinkChecker,
     link_checker::LinkCheckerLevel,

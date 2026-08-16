@@ -10,7 +10,7 @@ use utils::slugs::slugify_paths;
 use utils::table_of_contents::Heading;
 
 use crate::file_info::FileInfo;
-use crate::front_matter::{PageFrontMatter, split_page_content};
+use crate::front_matter::{PageFrontMatter, split_page_content_with_config};
 use crate::utils::get_reading_analytics;
 use crate::utils::{find_related_assets, get_colocated_assets, has_anchor};
 use utils::anchors::has_anchor_id;
@@ -97,7 +97,7 @@ impl Page {
         config: &Config,
         base_path: &Path,
     ) -> Result<Page> {
-        let (meta, content) = split_page_content(file_path, content)?;
+        let (meta, content) = split_page_content_with_config(file_path, content, config)?;
         let mut page = Page::new(file_path, meta, base_path);
 
         page.lang =
