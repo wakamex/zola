@@ -170,6 +170,7 @@ impl Config {
         config.add_default_language()?;
         config.slugify_taxonomies();
         config.link_checker.resolve_globset()?;
+        config.content.resolve_globset()?;
 
         let content_glob_set = build_ignore_glob_set(&config.ignored_content, "ignored_content")?;
         config.ignored_content_globset = Some(content_glob_set);

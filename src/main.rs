@@ -202,6 +202,13 @@ fn main() {
                 }
             }
         }
+        Command::Inspect { drafts, output } => {
+            let (root_dir, config_file) = get_config_file_path(&cli_dir, cli.config.as_deref());
+            if let Err(e) = cmd::inspect(&root_dir, &config_file, output.as_deref(), drafts) {
+                messages::unravel_errors("Failed to inspect the site", &e);
+                std::process::exit(1);
+            }
+        }
         Command::Completion { shell } => {
             let cmd = &mut Cli::command();
             clap_complete::generate(shell, cmd, cmd.get_name().to_string(), &mut std::io::stdout());

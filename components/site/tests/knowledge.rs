@@ -8,6 +8,10 @@ fn knowledge_site(extra_config: &str) -> TempDir {
     fs::create_dir_all(root.path().join("content/guides")).unwrap();
     fs::create_dir_all(root.path().join("content/bundles/example")).unwrap();
     fs::create_dir_all(root.path().join("templates")).unwrap();
+    fs::write(root.path().join("templates/page.html"), "{{ page.content | safe }}").unwrap();
+    fs::write(root.path().join("templates/section.html"), "{{ section.content | safe }}").unwrap();
+    fs::write(root.path().join("templates/index.html"), "{{ section.content | safe }}").unwrap();
+    fs::write(root.path().join("templates/404.html"), "Not found").unwrap();
     fs::write(root.path().join("content/index.md"), "# Home\n").unwrap();
     fs::write(root.path().join("content/guides/alpha.md"), "# Alpha\n").unwrap();
     fs::write(root.path().join("content/bundles/example/index.md"), "# Bundle\n").unwrap();
@@ -126,4 +130,47 @@ fn preserves_raw_html_and_literal_template_source() {
     let transcript = &site.library.pages[&root.path().join("content/raw/transcript.md")];
     assert!(transcript.content.contains("<aside data-source=\"capture\">Raw HTML</aside>"));
     assert!(transcript.content.contains("{{ captured.value }}"));
+}
+
+#[test]
+fn publishes_only_allowlisted_assets_and_reports_the_same_decisions() {
+    let root = knowledge_site("asset_include = [\"**/*.pdf\"]");
+    fs::write(root.path().join("content/guides/source.pdf"), "published").unwrap();
+    fs::write(root.path().join("content/guides/rejected.db"), "excluded").unwrap();
+
+    let mut site = Site::new(root.path(), "config.toml").unwrap();
+    site.load().unwrap();
+    let manifest = site.publication_manifest();
+    let published = manifest
+        .entries
+        .iter()
+        .find(|entry| entry.source_path == "content/guides/source.pdf")
+        .unwrap();
+    assert_eq!(published.state, "published");
+    assert_eq!(published.rule, "asset_include");
+    assert_eq!(published.output_path.as_deref(), Some("guides/source.pdf"));
+    let rejected = manifest
+        .entries
+        .iter()
+        .find(|entry| entry.source_path == "content/guides/rejected.db")
+        .unwrap();
+    assert_eq!(rejected.state, "excluded");
+    assert_eq!(rejected.rule, "asset_include");
+
+    site.build().unwrap();
+    assert!(root.path().join("public/guides/source.pdf").exists());
+    assert!(!root.path().join("public/guides/rejected.db").exists());
+}
+
+#[test]
+fn rejects_an_output_file_over_the_configured_limit() {
+    let root = knowledge_site("asset_include = [\"**/*.pdf\"]\nmax_file_size = 1024");
+    fs::write(root.path().join("content/guides/source.pdf"), vec![b'x'; 2048]).unwrap();
+
+    let mut site = Site::new(root.path(), "config.toml").unwrap();
+    site.load().unwrap();
+    let error = site.build().unwrap_err();
+    let message = format!("{error:#}");
+    assert!(message.contains("source.pdf"));
+    assert!(message.contains("exceeding content.max_file_size"));
 }

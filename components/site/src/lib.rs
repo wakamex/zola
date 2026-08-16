@@ -2,6 +2,7 @@ pub mod feeds;
 pub mod link_checking;
 mod md_render;
 mod minify;
+pub mod publication;
 mod queue;
 pub mod sass;
 pub mod sitemap;
@@ -83,6 +84,10 @@ pub struct Site {
 }
 
 impl Site {
+    pub fn publication_manifest(&self) -> publication::PublicationManifest {
+        publication::build(self)
+    }
+
     /// Parse a site at the given path. Defaults to the current dir
     /// Passing in a path is used in tests and when --root argument is passed
     pub fn new<P: AsRef<Path>, P2: AsRef<Path>>(path: P, config_file: P2) -> Result<Site> {
@@ -384,13 +389,11 @@ impl Site {
                                 format!("_index.{lang}.md")
                             };
                             let synthetic_path = path.join(filename);
-                            let mut section = Section::parse(
+                            let section = Section::from_implicit_path(
                                 &synthetic_path,
-                                "+++\n+++\n",
                                 &self.config,
                                 &self.base_path,
                             )?;
-                            section.implicit = true;
                             sections.insert(section.components.join("/"));
                             self.add_section(section, false)?;
                         }
@@ -835,6 +838,7 @@ impl Site {
     fn copy_assets(&self, parent: &Path, assets: &[impl AsRef<Path>], dest: &Path) -> Result<()> {
         for asset in assets {
             let asset_path = asset.as_ref();
+            self.validate_file_size(asset_path.metadata()?.len(), asset_path)?;
             copy_file_if_needed(
                 asset_path,
                 &dest.join(
@@ -844,6 +848,31 @@ impl Site {
             )?;
         }
 
+        Ok(())
+    }
+
+    fn validate_file_size(&self, size: u64, path: &Path) -> Result<()> {
+        if let Some(limit) = self.config.content.max_file_size
+            && size > limit
+        {
+            bail!(
+                "Output file `{}` is {size} bytes, exceeding content.max_file_size ({limit} bytes)",
+                path.display()
+            );
+        }
+        Ok(())
+    }
+
+    fn validate_output_sizes(&self) -> Result<()> {
+        let Some(_) = self.config.content.max_file_size else { return Ok(()) };
+        if matches!(self.build_mode, BuildMode::Memory) {
+            return Ok(());
+        }
+        for entry in WalkDir::new(&self.output_path).into_iter().filter_map(|entry| entry.ok()) {
+            if entry.path().is_file() {
+                self.validate_file_size(entry.metadata()?.len(), entry.path())?;
+            }
+        }
         Ok(())
     }
 
@@ -886,7 +915,9 @@ impl Site {
         start = log_time(start, "Processed images");
         // Processed images will be in static so the last step is to copy it
         self.copy_static_directories()?;
-        log_time(start, "Copied static dir");
+        start = log_time(start, "Copied static dir");
+        self.validate_output_sizes()?;
+        log_time(start, "Validated output file sizes");
 
         Ok(())
     }

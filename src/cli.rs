@@ -122,6 +122,16 @@ pub enum Command {
         skip_external_links: bool,
     },
 
+    /// Inspect effective content publication decisions as deterministic JSON
+    Inspect {
+        /// Include drafts when loading the site
+        #[clap(long)]
+        drafts: bool,
+        /// Write JSON to a file instead of standard output
+        #[clap(short = 'o', long)]
+        output: Option<PathBuf>,
+    },
+
     /// Generate shell completion
     Completion {
         /// Shell to generate completion for
