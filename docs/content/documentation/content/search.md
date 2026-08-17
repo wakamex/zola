@@ -21,6 +21,26 @@ implements it (using elasticlunr) to get an idea: [search.js](https://github.com
 In some cases, the default indexing strategy is not suitable. You can customize which fields to include and whether
 to truncate the content in the [search configuration](@/documentation/getting-started/configuration.md).
 
+## Searchable-content export
+
+Server-side search systems can consume a provider-neutral, build-only export instead of parsing the
+generated site. Configure a directory relative to the site root:
+
+```toml
+[search]
+content_export = "build/search"
+```
+
+The directory must be outside the public output directory. `zola build` writes a versioned manifest
+and a hash-named JSONL file containing published, searchable Markdown pages and explicit authored
+sections. Each record includes its source path, canonical URL, title, taxonomies, and structured
+rendered text under its headings. Implicit sections, generated taxonomies, redirects, drafts,
+`render = false` content, and entries excluded from search are omitted.
+
+The manifest is promoted after the complete JSONL file and covers its exact bytes with SHA-256.
+Consumers should verify the schema version, record count, filename, and hash before using an export.
+Zola does not define provider-specific chunks, record IDs, search weights, or synchronization.
+
 ## Index Formats
 
 ### Elasticlunr

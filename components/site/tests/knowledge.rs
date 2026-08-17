@@ -1,5 +1,7 @@
 use std::fs;
 
+use serde_json::Value;
+use sha2::{Digest, Sha256};
 use site::Site;
 use tempfile::TempDir;
 
@@ -269,4 +271,144 @@ fn rejects_an_output_file_over_the_configured_limit() {
     let message = format!("{error:#}");
     assert!(message.contains("source.pdf"));
     assert!(message.contains("exceeding content.max_file_size"));
+}
+
+#[test]
+fn writes_a_complete_deterministic_search_content_export() {
+    let root = knowledge_site("");
+    fs::create_dir_all(root.path().join("content/private")).unwrap();
+    fs::create_dir_all(root.path().join("content/hidden-section")).unwrap();
+    let config_path = root.path().join("config.toml");
+    let mut config = fs::read_to_string(&config_path).unwrap();
+    config.push_str("\n[search]\ncontent_export = \"build/search\"\n");
+    fs::write(&config_path, config).unwrap();
+    fs::write(
+        root.path().join("templates/components.html"),
+        "{% component evidence() %}<strong>Expanded shortcode.</strong>{% endcomponent %}",
+    )
+    .unwrap();
+    fs::write(
+        root.path().join("content/guides/alpha.md"),
+        "+++\n[taxonomies]\ntags = [\"evidence\"]\n+++\n# Alpha\n\nLead. {{ <evidence /> }}\n\n## Finding\n\nBody.\n",
+    )
+    .unwrap();
+    fs::write(
+        root.path().join("content/guides/unrendered.md"),
+        "+++\nrender = false\n+++\n# Excluded\n",
+    )
+    .unwrap();
+    fs::write(
+        root.path().join("content/guides/hidden.md"),
+        "+++\nhidden = true\n+++\n# Hidden page\n",
+    )
+    .unwrap();
+    fs::write(
+        root.path().join("content/private/_index.md"),
+        "+++\nin_search_index = false\n+++\n# Private section\n",
+    )
+    .unwrap();
+    fs::write(root.path().join("content/private/child.md"), "# Child excluded by parent\n")
+        .unwrap();
+    fs::write(
+        root.path().join("content/hidden-section/_index.md"),
+        "+++\nhidden = true\n+++\n# Hidden section\n",
+    )
+    .unwrap();
+
+    let mut site = Site::new(root.path(), "config.toml").unwrap();
+    site.load().unwrap();
+    site.build().unwrap();
+
+    let export_dir = root.path().join("build/search");
+    let manifest_path = export_dir.join("search-content-manifest.json");
+    let manifest: Value =
+        serde_json::from_str(&fs::read_to_string(&manifest_path).unwrap()).unwrap();
+    assert_eq!(manifest["schemaVersion"], 1);
+    let data_name = manifest["dataFile"].as_str().unwrap();
+    let data = fs::read(export_dir.join(data_name)).unwrap();
+    assert_eq!(
+        manifest["recordCount"],
+        data.split(|byte| *byte == b'\n').filter(|line| !line.is_empty()).count()
+    );
+    let digest = Sha256::digest(&data).iter().map(|byte| format!("{byte:02x}")).collect::<String>();
+    assert_eq!(manifest["corpusSha256"], digest);
+    assert!(data_name.contains(&digest));
+    assert!(!root.path().join("public/build/search").exists());
+
+    let records: Vec<Value> = data
+        .split(|byte| *byte == b'\n')
+        .filter(|line| !line.is_empty())
+        .map(|line| serde_json::from_slice(line).unwrap())
+        .collect();
+    assert!(records.iter().any(|record| {
+        record["source"] == "guides/alpha.md"
+            && record["url"] == "/guides/alpha/"
+            && record["title"] == "Alpha"
+            && record["taxonomies"]["tags"][0] == "evidence"
+            && record["sections"][0]["body"] == "Lead. Expanded shortcode."
+            && record["sections"][1]["heading"]["id"] == "finding"
+            && record["sections"][1]["body"] == "Body."
+    }));
+    assert!(!records.iter().any(|record| record["source"] == "guides/unrendered.md"));
+    assert!(!records.iter().any(|record| record["source"] == "guides/hidden.md"));
+    assert!(!records.iter().any(|record| record["source"] == "private/_index.md"));
+    assert!(!records.iter().any(|record| record["source"] == "private/child.md"));
+    assert!(!records.iter().any(|record| record["source"] == "hidden-section/_index.md"));
+    assert!(!records.iter().any(|record| record["source"] == "guides/_index.md"));
+
+    site.build().unwrap();
+    let second_manifest = fs::read_to_string(&manifest_path).unwrap();
+    assert_eq!(serde_json::from_str::<Value>(&second_manifest).unwrap(), manifest);
+    assert_eq!(
+        fs::read_dir(&export_dir)
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|entry| entry.file_name().to_string_lossy().ends_with(".jsonl"))
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn rejects_search_content_export_inside_public_output() {
+    assert_export_path_rejected("public/search", "must be outside the public output");
+    assert_export_path_rejected("public/../public/search", "must be outside the public output");
+}
+
+#[test]
+fn rejects_search_content_export_inside_public_source_roots() {
+    assert_export_path_rejected("content/search", "must be outside public source root");
+    assert_export_path_rejected("static/search", "must be outside public source root");
+}
+
+#[cfg(unix)]
+#[test]
+fn rejects_search_content_export_through_a_symlink_to_public_output() {
+    use std::os::unix::fs::symlink;
+
+    let root = knowledge_site("");
+    fs::create_dir_all(root.path().join("public")).unwrap();
+    symlink(root.path().join("public"), root.path().join("export-link")).unwrap();
+    let config_path = root.path().join("config.toml");
+    let mut config = fs::read_to_string(&config_path).unwrap();
+    config.push_str("\n[search]\ncontent_export = \"export-link/search\"\n");
+    fs::write(&config_path, config).unwrap();
+
+    let mut site = Site::new(root.path(), "config.toml").unwrap();
+    site.load().unwrap();
+    let error = site.build().unwrap_err();
+    assert!(format!("{error:#}").contains("must be outside the public output"));
+}
+
+fn assert_export_path_rejected(export_path: &str, expected: &str) {
+    let root = knowledge_site("");
+    let config_path = root.path().join("config.toml");
+    let mut config = fs::read_to_string(&config_path).unwrap();
+    config.push_str(&format!("\n[search]\ncontent_export = \"{export_path}\"\n"));
+    fs::write(&config_path, config).unwrap();
+
+    let mut site = Site::new(root.path(), "config.toml").unwrap();
+    site.load().unwrap();
+    let error = site.build().unwrap_err();
+    assert!(format!("{error:#}").contains(expected));
 }
