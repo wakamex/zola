@@ -244,6 +244,9 @@ anchors = "on"
 paths_keep_dates = false
 
 [search]
+# Optional build-only searchable-content export directory. The path is relative to the site root
+# and must be outside the public output directory.
+# content_export = "build/search"
 # Whether to include the title of the page/section in the index
 include_title = true
 # Whether to include the description of the page/section in the index

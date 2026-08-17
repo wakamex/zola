@@ -919,6 +919,18 @@ impl Site {
         self.validate_output_sizes()?;
         log_time(start, "Validated output file sizes");
 
+        if self.build_mode == BuildMode::Disk
+            && let Some(ref export_path) = self.config.search.content_export
+        {
+            search::write_content_export(
+                &self.base_path,
+                &self.output_path,
+                export_path,
+                &self.library,
+                &self.config,
+            )?;
+        }
+
         Ok(())
     }
 

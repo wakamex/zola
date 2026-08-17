@@ -1,4 +1,5 @@
 mod elasticlunr;
+mod export;
 mod fuse;
 
 use content::Library;
@@ -7,6 +8,7 @@ use std::sync::LazyLock;
 use time::OffsetDateTime;
 
 pub use elasticlunr::{ELASTICLUNR_JS, build_index as build_elasticlunr};
+pub use export::write_content_export;
 pub use fuse::build_index as build_fuse;
 
 static AMMONIA: LazyLock<ammonia::Builder<'static>> = LazyLock::new(|| {

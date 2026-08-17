@@ -11,6 +11,8 @@ taxonomies = [
 ]
 
 [search]
+# Optional provider-neutral, build-only searchable-content export directory.
+# content_export = "build/search"
 index_format = "elasticlunr_json"
 
 [markdown]

@@ -37,6 +37,8 @@ tempfile = "3"
 path-slash = "0.2"
 insta = { workspace = true }
 criterion = "0.8"
+serde_json = { workspace = true }
+sha2 = { workspace = true }
 
 [[bench]]
 name = "load"

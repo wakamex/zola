@@ -29,6 +29,9 @@ impl IndexFormat {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Search {
+    /// Optional path, relative to the site root, for a provider-neutral searchable-content export.
+    /// The export is written only by `zola build`, never into the public output implicitly.
+    pub content_export: Option<String>,
     /// Include the title of the page in the search index. `true` by default.
     pub include_title: bool,
     /// Includes the whole content in the search index. Ok for small sites but becomes
@@ -50,6 +53,7 @@ pub struct Search {
 impl Default for Search {
     fn default() -> Self {
         Search {
+            content_export: None,
             include_title: true,
             include_content: true,
             include_description: false,
