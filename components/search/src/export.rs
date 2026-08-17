@@ -12,6 +12,8 @@ use scraper::{Html, Node, Selector};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
+use crate::{SearchablePublication, collect_searchable_publications};
+
 const SCHEMA_VERSION: u32 = 1;
 const MANIFEST_NAME: &str = "search-content-manifest.json";
 const DATA_PREFIX: &str = "search-content-";
@@ -155,6 +157,7 @@ impl TextCollector {
 pub fn write_content_export(
     base_path: &Path,
     output_path: &Path,
+    source_paths: &[&Path],
     configured_path: &str,
     library: &Library,
     config: &Config,
@@ -164,23 +167,17 @@ pub fn write_content_export(
         bail!("search.content_export cannot be empty");
     }
 
-    let export_dir = resolve_export_dir(base_path, configured_path);
-    if export_dir.starts_with(output_path) {
-        bail!(
-            "search.content_export `{}` must be outside the public output `{}`",
-            export_dir.display(),
-            output_path.display()
-        );
-    }
+    let export_dir = canonical_destination(base_path, configured_path)?;
+    reject_public_source_destination(&export_dir, output_path, source_paths)?;
     fs::create_dir_all(&export_dir)?;
 
-    let publications = collect_publications(library);
+    let publications = collect_searchable_publications(None, library);
     let temporary_data = export_dir.join(format!(".{DATA_PREFIX}{}.tmp", std::process::id()));
     let mut writer = BufWriter::new(File::create(&temporary_data)?);
     let mut hasher = Sha256::new();
     let mut record_count = 0;
     for publication in publications {
-        let Some(record) = publication.record(config) else { continue };
+        let Some(record) = publication_record(publication, config) else { continue };
         let mut bytes = serde_json::to_vec(&record)?;
         bytes.push(b'\n');
         writer.write_all(&bytes)?;
@@ -218,46 +215,14 @@ pub fn write_content_export(
     Ok(())
 }
 
-enum Publication<'a> {
-    Page(&'a Page),
-    Section(&'a Section),
-}
-
-impl Publication<'_> {
-    fn source(&self) -> &str {
-        match self {
-            Self::Page(page) => &page.file.relative,
-            Self::Section(section) => &section.file.relative,
-        }
+fn publication_record(
+    publication: SearchablePublication<'_>,
+    config: &Config,
+) -> Option<ContentRecord> {
+    match publication {
+        SearchablePublication::Page(page) => page_record(page),
+        SearchablePublication::Section(section) => section_record(section, config),
     }
-
-    fn record(&self, config: &Config) -> Option<ContentRecord> {
-        match self {
-            Self::Page(page) => page_record(page),
-            Self::Section(section) => section_record(section, config),
-        }
-    }
-}
-
-fn collect_publications(library: &Library) -> Vec<Publication<'_>> {
-    let mut publications = Vec::new();
-    for page in library.pages.values() {
-        if page.meta.render && page.meta.in_search_index {
-            publications.push(Publication::Page(page));
-        }
-    }
-    for section in library.sections.values() {
-        if section.meta.render
-            && section.meta.in_search_index
-            && section.meta.redirect_to.is_none()
-            && !section.implicit
-            && section.file.path.is_file()
-        {
-            publications.push(Publication::Section(section));
-        }
-    }
-    publications.sort_by(|left, right| left.source().cmp(right.source()));
-    publications
 }
 
 fn page_record(page: &Page) -> Option<ContentRecord> {
@@ -348,6 +313,73 @@ fn display_slug(slug: &str) -> String {
 fn resolve_export_dir(base_path: &Path, configured_path: &str) -> PathBuf {
     let configured = Path::new(configured_path);
     if configured.is_absolute() { configured.to_path_buf() } else { base_path.join(configured) }
+}
+
+fn canonical_destination(base_path: &Path, configured_path: &str) -> Result<PathBuf> {
+    canonicalize_with_missing(&resolve_export_dir(base_path, configured_path))
+}
+
+fn canonicalize_with_missing(destination: &Path) -> Result<PathBuf> {
+    let mut existing = destination;
+    let mut suffix = Vec::new();
+    while !existing.exists() {
+        let Some(name) = existing.file_name() else {
+            bail!("search.content_export `{}` has no existing ancestor", destination.display());
+        };
+        suffix.push(name.to_os_string());
+        let Some(parent) = existing.parent() else {
+            bail!("search.content_export `{}` has no existing ancestor", destination.display());
+        };
+        existing = parent;
+    }
+
+    let mut canonical = fs::canonicalize(existing)?;
+    for component in suffix.iter().rev() {
+        canonical.push(component);
+    }
+    Ok(normalize_path(&canonical))
+}
+
+fn normalize_path(path: &Path) -> PathBuf {
+    use std::path::Component;
+
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                normalized.pop();
+            }
+            _ => normalized.push(component.as_os_str()),
+        }
+    }
+    normalized
+}
+
+fn reject_public_source_destination(
+    export_dir: &Path,
+    output_path: &Path,
+    source_paths: &[&Path],
+) -> Result<()> {
+    let output_path = canonicalize_with_missing(output_path)?;
+    if export_dir.starts_with(&output_path) {
+        bail!(
+            "search.content_export `{}` must be outside the public output `{}`",
+            export_dir.display(),
+            output_path.display()
+        );
+    }
+    for source_path in source_paths {
+        let source_path = canonicalize_with_missing(source_path)?;
+        if export_dir.starts_with(&source_path) {
+            bail!(
+                "search.content_export `{}` must be outside public source root `{}`",
+                export_dir.display(),
+                source_path.display()
+            );
+        }
+    }
+    Ok(())
 }
 
 fn remove_stale_data_files(export_dir: &Path, current_name: &str) -> Result<()> {

@@ -2,7 +2,7 @@ mod elasticlunr;
 mod export;
 mod fuse;
 
-use content::Library;
+use content::{Library, Page, Section};
 use std::collections::{HashMap, HashSet};
 use std::sync::LazyLock;
 use time::OffsetDateTime;
@@ -55,44 +55,86 @@ struct IndexItem<'a> {
     path: &'a String,
 }
 
-/// Collect all pages and sections which should be included in the search index
-/// of a given language.
-fn collect_index_items<'a>(lang: &str, library: &'a Library) -> Vec<IndexItem<'a>> {
-    let mut items: Vec<IndexItem> = Vec::new();
-    for (_, section) in &library.sections {
-        if section.lang != lang {
-            continue;
+/// A rendered page or authored section whose parent section permits search indexing.
+pub(crate) enum SearchablePublication<'a> {
+    Page(&'a Page),
+    Section(&'a Section),
+}
+
+impl SearchablePublication<'_> {
+    pub(crate) fn source(&self) -> &str {
+        match self {
+            Self::Page(page) => &page.file.relative,
+            Self::Section(section) => &section.file.relative,
         }
-        if !section.meta.in_search_index {
+    }
+}
+
+/// Collect the canonical set of published content eligible for search.
+///
+/// Pages are reached through their direct parent section so a section with
+/// `in_search_index = false` also excludes its direct pages. The section's
+/// computed page roster already excludes hidden and unrendered pages.
+pub(crate) fn collect_searchable_publications<'a>(
+    lang: Option<&str>,
+    library: &'a Library,
+) -> Vec<SearchablePublication<'a>> {
+    let mut publications = Vec::new();
+    let mut seen_pages = HashSet::new();
+
+    for section in library.sections.values() {
+        if lang.is_some_and(|lang| section.lang != lang) || !section.meta.in_search_index {
             continue;
         }
 
-        if section.meta.redirect_to.is_none() && !section.hidden {
-            items.push(IndexItem {
+        if section.meta.render
+            && section.meta.redirect_to.is_none()
+            && !section.hidden
+            && !section.implicit
+            && section.file.path.is_file()
+        {
+            publications.push(SearchablePublication::Section(section));
+        }
+
+        for page_path in &section.pages {
+            if !seen_pages.insert(page_path.clone()) {
+                continue;
+            }
+            let page = &library.pages[page_path];
+            if page.meta.in_search_index && lang.map_or(true, |lang| page.lang == lang) {
+                publications.push(SearchablePublication::Page(page));
+            }
+        }
+    }
+
+    publications.sort_by(|left, right| left.source().cmp(right.source()));
+    publications
+}
+
+/// Collect all pages and sections which should be included in the search index
+/// of a given language.
+fn collect_index_items<'a>(lang: &str, library: &'a Library) -> Vec<IndexItem<'a>> {
+    collect_searchable_publications(Some(lang), library)
+        .into_iter()
+        .map(|publication| match publication {
+            SearchablePublication::Section(section) => IndexItem {
                 url: &section.permalink,
                 title: &section.meta.title,
                 datetime: &None,
                 description: &section.meta.description,
                 content: &section.content,
                 path: &section.path,
-            });
-        }
-
-        for page in &section.pages {
-            let page = &library.pages[page];
-            if page.meta.in_search_index {
-                items.push(IndexItem {
-                    url: &page.permalink,
-                    title: &page.meta.title,
-                    datetime: &page.meta.datetime,
-                    description: &page.meta.description,
-                    content: &page.content,
-                    path: &page.path,
-                })
-            }
-        }
-    }
-    items
+            },
+            SearchablePublication::Page(page) => IndexItem {
+                url: &page.permalink,
+                title: &page.meta.title,
+                datetime: &page.meta.datetime,
+                description: &page.meta.description,
+                content: &page.content,
+                path: &page.path,
+            },
+        })
+        .collect()
 }
 
 #[cfg(test)]

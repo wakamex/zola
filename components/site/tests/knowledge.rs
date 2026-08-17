@@ -276,6 +276,8 @@ fn rejects_an_output_file_over_the_configured_limit() {
 #[test]
 fn writes_a_complete_deterministic_search_content_export() {
     let root = knowledge_site("");
+    fs::create_dir_all(root.path().join("content/private")).unwrap();
+    fs::create_dir_all(root.path().join("content/hidden-section")).unwrap();
     let config_path = root.path().join("config.toml");
     let mut config = fs::read_to_string(&config_path).unwrap();
     config.push_str("\n[search]\ncontent_export = \"build/search\"\n");
@@ -293,6 +295,23 @@ fn writes_a_complete_deterministic_search_content_export() {
     fs::write(
         root.path().join("content/guides/unrendered.md"),
         "+++\nrender = false\n+++\n# Excluded\n",
+    )
+    .unwrap();
+    fs::write(
+        root.path().join("content/guides/hidden.md"),
+        "+++\nhidden = true\n+++\n# Hidden page\n",
+    )
+    .unwrap();
+    fs::write(
+        root.path().join("content/private/_index.md"),
+        "+++\nin_search_index = false\n+++\n# Private section\n",
+    )
+    .unwrap();
+    fs::write(root.path().join("content/private/child.md"), "# Child excluded by parent\n")
+        .unwrap();
+    fs::write(
+        root.path().join("content/hidden-section/_index.md"),
+        "+++\nhidden = true\n+++\n# Hidden section\n",
     )
     .unwrap();
 
@@ -331,6 +350,10 @@ fn writes_a_complete_deterministic_search_content_export() {
             && record["sections"][1]["body"] == "Body."
     }));
     assert!(!records.iter().any(|record| record["source"] == "guides/unrendered.md"));
+    assert!(!records.iter().any(|record| record["source"] == "guides/hidden.md"));
+    assert!(!records.iter().any(|record| record["source"] == "private/_index.md"));
+    assert!(!records.iter().any(|record| record["source"] == "private/child.md"));
+    assert!(!records.iter().any(|record| record["source"] == "hidden-section/_index.md"));
     assert!(!records.iter().any(|record| record["source"] == "guides/_index.md"));
 
     site.build().unwrap();
@@ -348,14 +371,44 @@ fn writes_a_complete_deterministic_search_content_export() {
 
 #[test]
 fn rejects_search_content_export_inside_public_output() {
+    assert_export_path_rejected("public/search", "must be outside the public output");
+    assert_export_path_rejected("public/../public/search", "must be outside the public output");
+}
+
+#[test]
+fn rejects_search_content_export_inside_public_source_roots() {
+    assert_export_path_rejected("content/search", "must be outside public source root");
+    assert_export_path_rejected("static/search", "must be outside public source root");
+}
+
+#[cfg(unix)]
+#[test]
+fn rejects_search_content_export_through_a_symlink_to_public_output() {
+    use std::os::unix::fs::symlink;
+
     let root = knowledge_site("");
+    fs::create_dir_all(root.path().join("public")).unwrap();
+    symlink(root.path().join("public"), root.path().join("export-link")).unwrap();
     let config_path = root.path().join("config.toml");
     let mut config = fs::read_to_string(&config_path).unwrap();
-    config.push_str("\n[search]\ncontent_export = \"public/search\"\n");
+    config.push_str("\n[search]\ncontent_export = \"export-link/search\"\n");
     fs::write(&config_path, config).unwrap();
 
     let mut site = Site::new(root.path(), "config.toml").unwrap();
     site.load().unwrap();
     let error = site.build().unwrap_err();
     assert!(format!("{error:#}").contains("must be outside the public output"));
+}
+
+fn assert_export_path_rejected(export_path: &str, expected: &str) {
+    let root = knowledge_site("");
+    let config_path = root.path().join("config.toml");
+    let mut config = fs::read_to_string(&config_path).unwrap();
+    config.push_str(&format!("\n[search]\ncontent_export = \"{export_path}\"\n"));
+    fs::write(&config_path, config).unwrap();
+
+    let mut site = Site::new(root.path(), "config.toml").unwrap();
+    site.load().unwrap();
+    let error = site.build().unwrap_err();
+    assert!(format!("{error:#}").contains(expected));
 }

@@ -925,6 +925,7 @@ impl Site {
             search::write_content_export(
                 &self.base_path,
                 &self.output_path,
+                &[&self.content_path, &self.static_path, &self.sass_path],
                 export_path,
                 &self.library,
                 &self.config,
