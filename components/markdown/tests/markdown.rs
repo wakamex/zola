@@ -507,6 +507,16 @@ fn wikilink_resolution() {
 }
 
 #[test]
+fn can_make_self_anchor_wikilinks() {
+    let mut config = Config::default_for_test();
+    config.markdown.wikilinks = true;
+    let rendered =
+        common::render_with_config("[[#details|Details]]\n\n## Details", config).unwrap();
+    assert!(rendered.body.contains("href=\"https://www.getzola.org/test/#details\""));
+    assert_eq!(rendered.internal_links, [("my_page.md".to_string(), Some("details".to_string()))]);
+}
+
+#[test]
 fn wikilink_nonexistent() {
     // warn level: renders with raw link
     let mut config = Config::default_for_test();
