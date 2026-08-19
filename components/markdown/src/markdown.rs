@@ -431,7 +431,9 @@ impl<'a> State<'a> {
             }
             match ctx.wikilinks.resolve(key) {
                 Ok(resolved) => {
-                    self.internal_links.push((resolved.md_path, anchor.clone()));
+                    if resolved.track_backlink {
+                        self.internal_links.push((resolved.md_path, anchor.clone()));
+                    }
                     match anchor {
                         Some(a) => format!("{}#{}", resolved.permalink, a),
                         None => resolved.permalink,
@@ -797,11 +799,13 @@ mod tests {
                 source_path: "archive/duplicate.md".to_string(),
                 permalink: "/archive/duplicate/".to_string(),
                 aliases: Vec::new(),
+                track_backlink: true,
             },
             WikilinkTarget {
                 source_path: "guides/duplicate.md".to_string(),
                 permalink: "/guides/duplicate/".to_string(),
                 aliases: Vec::new(),
+                track_backlink: true,
             },
         ]);
         let context = make_context(&config, &tera, &permalinks, &wikilinks);
@@ -810,6 +814,25 @@ mod tests {
         assert!(message.contains("target is ambiguous"));
         assert!(message.contains("archive/duplicate.md"));
         assert!(message.contains("guides/duplicate.md"));
+    }
+
+    #[test]
+    fn wikilink_targets_can_opt_out_of_backlinks() {
+        let mut config = Config::default_for_test();
+        config.markdown.wikilinks = true;
+        let tera = ZOLA_TERA.clone();
+        let permalinks = AHashMap::new();
+        let wikilinks = WikilinkResolver::from_targets([WikilinkTarget {
+            source_path: "guides/source.pdf".to_string(),
+            permalink: "/guides/source.pdf".to_string(),
+            aliases: Vec::new(),
+            track_backlink: false,
+        }]);
+        let context = make_context(&config, &tera, &permalinks, &wikilinks);
+
+        let rendered = render_content("[[guides/source.pdf|Source]]", &context).unwrap();
+        assert!(rendered.body.contains("href=\"/guides/source.pdf\""));
+        assert!(rendered.internal_links.is_empty());
     }
 
     #[test]

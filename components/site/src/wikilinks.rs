@@ -1,32 +1,62 @@
-use content::Library;
+use ahash::AHashMap;
+use content::{Library, Taxonomy};
 use utils::site::{WikilinkResolver, WikilinkTarget};
 
-/// Build a wikilink resolver from every renderable page and section in the library.
+/// Build a wikilink resolver from every renderable page and section, colocated asset, and taxonomy
+/// term in the library.
 ///
 /// The resolver preserves each content path and also reuses the aliases already declared in front
-/// matter. Bare stems are resolved only when they identify one content file.
-pub fn build_wikilinks(library: &Library) -> WikilinkResolver {
+/// matter. Bare stems are resolved only when they identify one target. Assets and taxonomy terms
+/// resolve to their output URLs but do not create backlinks.
+pub fn build_wikilinks(library: &Library, taxonomies: &[Taxonomy]) -> WikilinkResolver {
     let pages = library.pages.values().filter(|page| page.meta.render).map(|page| WikilinkTarget {
         source_path: page.file.relative.clone(),
         permalink: page.permalink.clone(),
         aliases: page.meta.aliases.clone(),
+        track_backlink: true,
     });
     let sections = library.sections.values().filter(|section| section.meta.render).map(|section| {
         WikilinkTarget {
             source_path: section.file.relative.clone(),
             permalink: section.permalink.clone(),
             aliases: section.meta.aliases.clone(),
+            track_backlink: true,
         }
     });
-    WikilinkResolver::from_targets(pages.chain(sections))
+    let owners = library
+        .pages
+        .values()
+        .map(|page| (&page.file.relative, &page.permalink))
+        .chain(
+            library.sections.values().map(|section| (&section.file.relative, &section.permalink)),
+        )
+        .collect::<AHashMap<_, _>>();
+    let assets = library.colocated_assets.iter().filter_map(|(path, (owner, relative))| {
+        let permalink = owners.get(owner)?;
+        Some(WikilinkTarget {
+            source_path: path.clone(),
+            permalink: format!("{permalink}{relative}"),
+            aliases: Vec::new(),
+            track_backlink: false,
+        })
+    });
+    let taxonomy_terms = taxonomies.iter().flat_map(|taxonomy| {
+        taxonomy.items.iter().map(|term| WikilinkTarget {
+            source_path: term.path.trim_matches('/').to_string(),
+            permalink: term.permalink.clone(),
+            aliases: Vec::new(),
+            track_backlink: false,
+        })
+    });
+    WikilinkResolver::from_targets(pages.chain(sections).chain(assets).chain(taxonomy_terms))
 }
 
 #[cfg(test)]
 mod tests {
     use std::path::Path;
 
-    use config::Config;
-    use content::{Library, Page, PageFrontMatter};
+    use config::{Config, TaxonomyConfig};
+    use content::{Library, Page, PageFrontMatter, TaxonomyTerm};
     use utils::site::WikilinkError;
 
     use super::*;
@@ -58,7 +88,7 @@ mod tests {
         library.insert_page(page("_index.md", "/", &[]));
         library.insert_page(page("guides/quickstart.md", "/guides/quickstart/", &["/start/"]));
 
-        let resolver = build_wikilinks(&library);
+        let resolver = build_wikilinks(&library, &[]);
 
         // Full paths always resolve.
         assert_resolves(&resolver, "blog/overview", "blog/overview.md");
@@ -94,7 +124,7 @@ mod tests {
         library.insert_page(page("archive/duplicate.md", "/archive/duplicate/", &[]));
 
         assert_eq!(
-            build_wikilinks(&library).resolve("duplicate"),
+            build_wikilinks(&library, &[]).resolve("duplicate"),
             Err(WikilinkError::Ambiguous {
                 candidates: vec![
                     "archive/duplicate.md".to_string(),
@@ -102,5 +132,38 @@ mod tests {
                 ],
             })
         );
+    }
+
+    #[test]
+    fn resolves_colocated_assets_and_taxonomy_terms_without_backlinks() {
+        let config = Config::default_for_test();
+        let mut library = Library::new(&config);
+        library.insert_page(page("guides/alpha.md", "/guides/alpha/", &[]));
+        library.colocated_assets.insert(
+            "guides/source.pdf".to_string(),
+            ("guides/alpha.md".to_string(), "source.pdf".to_string()),
+        );
+        let taxonomies = [Taxonomy {
+            kind: TaxonomyConfig::default(),
+            lang: "en".to_string(),
+            slug: "tags".to_string(),
+            path: "/tags/".to_string(),
+            permalink: "https://example.com/tags/".to_string(),
+            items: vec![TaxonomyTerm {
+                name: "Evidence".to_string(),
+                slug: "evidence".to_string(),
+                path: "/tags/evidence/".to_string(),
+                permalink: "https://example.com/tags/evidence/".to_string(),
+                pages: Vec::new(),
+            }],
+        }];
+
+        let resolver = build_wikilinks(&library, &taxonomies);
+        let asset = resolver.resolve("guides/source.pdf").unwrap();
+        assert_eq!(asset.permalink, "/guides/alpha/source.pdf");
+        assert!(!asset.track_backlink);
+        let term = resolver.resolve("tags/evidence").unwrap();
+        assert_eq!(term.permalink, "https://example.com/tags/evidence/");
+        assert!(!term.track_backlink);
     }
 }

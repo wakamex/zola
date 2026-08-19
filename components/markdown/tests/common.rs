@@ -26,11 +26,13 @@ fn configurable_render(
             source_path: "guides/quickstart.md".to_owned(),
             permalink: "https://getzola.org/guides/quickstart/".to_owned(),
             aliases: Vec::new(),
+            track_backlink: true,
         },
         WikilinkTarget {
             source_path: "about.md".to_owned(),
             permalink: "https://getzola.org/about/".to_owned(),
             aliases: Vec::new(),
+            track_backlink: true,
         },
     ]);
 

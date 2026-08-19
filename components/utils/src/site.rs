@@ -8,12 +8,14 @@ pub struct WikilinkTarget {
     pub source_path: String,
     pub permalink: String,
     pub aliases: Vec<String>,
+    pub track_backlink: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ResolvedWikilink {
     pub md_path: String,
     pub permalink: String,
+    pub track_backlink: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -101,6 +103,7 @@ impl WikilinkResolver {
                 Ok(ResolvedWikilink {
                     md_path: target.source_path.clone(),
                     permalink: target.permalink.clone(),
+                    track_backlink: target.track_backlink,
                 })
             }
             _ => Err(WikilinkError::Ambiguous { candidates: paths }),
