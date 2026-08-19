@@ -1,13 +1,14 @@
 use ahash::AHashMap;
-use content::Library;
+use content::{Library, Taxonomy};
 use markdown::{WikilinkResolver, WikilinkTarget};
 
-/// Build wikilink targets from content and published colocated assets.
+/// Build wikilink targets from content, published colocated assets, and rendered taxonomy terms.
 ///
 /// Render-disabled content remains addressable to preserve the lookup behavior of the original
 /// permalink-based implementation. Asset targets require their exact qualified path and are only
-/// included when their owner emits the asset.
-pub fn build_wikilinks(library: &Library) -> WikilinkResolver {
+/// included when their owner emits the asset. Taxonomy terms also require their exact qualified
+/// output path and are included only when their taxonomy is rendered.
+pub fn build_wikilinks(library: &Library, taxonomies: &[Taxonomy]) -> WikilinkResolver {
     let pages = library
         .pages
         .values()
@@ -32,15 +33,22 @@ pub fn build_wikilinks(library: &Library) -> WikilinkResolver {
         let permalink = asset_owners.get(owner)?;
         Some(WikilinkTarget::output(path.clone(), format!("{permalink}{relative}")))
     });
-    WikilinkResolver::from_targets(pages.chain(sections).chain(assets))
+    let taxonomy_terms = taxonomies
+        .iter()
+        .filter(|taxonomy| taxonomy.kind.render)
+        .flat_map(|taxonomy| &taxonomy.items)
+        .map(|term| {
+            WikilinkTarget::output(term.path.trim_matches('/').to_string(), term.permalink.clone())
+        });
+    WikilinkResolver::from_targets(pages.chain(sections).chain(assets).chain(taxonomy_terms))
 }
 
 #[cfg(test)]
 mod tests {
     use std::path::Path;
 
-    use config::Config;
-    use content::{Library, Page, PageFrontMatter, Section, SectionFrontMatter};
+    use config::{Config, TaxonomyConfig};
+    use content::{Library, Page, PageFrontMatter, Section, SectionFrontMatter, TaxonomyTerm};
     use markdown::{ResolvedWikilink, WikilinkError};
 
     use super::*;
@@ -75,6 +83,25 @@ mod tests {
             .insert(path.to_string(), (owner.to_string(), relative.to_string()));
     }
 
+    fn taxonomy(slug: &str, term: &str, render: bool) -> Taxonomy {
+        let path = format!("/{slug}/");
+        let term_path = format!("{path}{term}/");
+        Taxonomy {
+            kind: TaxonomyConfig { render, ..Default::default() },
+            lang: "en".to_string(),
+            slug: slug.to_string(),
+            path: path.clone(),
+            permalink: path,
+            items: vec![TaxonomyTerm {
+                name: term.to_string(),
+                slug: term.to_string(),
+                path: term_path.clone(),
+                permalink: term_path,
+                pages: Vec::new(),
+            }],
+        }
+    }
+
     #[test]
     fn includes_aliases_and_render_disabled_content() {
         let config = Config::default_for_test();
@@ -83,7 +110,7 @@ mod tests {
         library.insert_page(page("notes/private.md", &["/private-note/"], false));
         library.insert_section(section("docs/_index.md", &["/documentation/"], None));
 
-        let resolver = build_wikilinks(&library);
+        let resolver = build_wikilinks(&library, &[]);
         assert_eq!(
             resolver.resolve("start"),
             Ok(ResolvedWikilink::Content("guides/quickstart.md"))
@@ -125,7 +152,7 @@ mod tests {
         asset(&mut library, "examples/demo.zip", "examples/_index.md", "demo.zip");
         asset(&mut library, "old/archive.zip", "old/_index.md", "archive.zip");
 
-        let resolver = build_wikilinks(&library);
+        let resolver = build_wikilinks(&library, &[]);
         assert_eq!(
             resolver.resolve("guides/source.pdf"),
             Ok(ResolvedWikilink::Output("/guides/source.pdf"))
@@ -137,5 +164,21 @@ mod tests {
             Ok(ResolvedWikilink::Output("/examples/demo.zip"))
         );
         assert_eq!(resolver.resolve("old/archive.zip"), Err(WikilinkError::Missing));
+    }
+
+    #[test]
+    fn includes_only_rendered_taxonomy_terms_by_qualified_path() {
+        let config = Config::default_for_test();
+        let library = Library::new(&config);
+        let taxonomies =
+            [taxonomy("tags", "evidence", true), taxonomy("internal", "secret", false)];
+
+        let resolver = build_wikilinks(&library, &taxonomies);
+        assert_eq!(
+            resolver.resolve("tags/evidence"),
+            Ok(ResolvedWikilink::Output("/tags/evidence/"))
+        );
+        assert_eq!(resolver.resolve("evidence"), Err(WikilinkError::Missing));
+        assert_eq!(resolver.resolve("internal/secret"), Err(WikilinkError::Missing));
     }
 }

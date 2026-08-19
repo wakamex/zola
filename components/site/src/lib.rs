@@ -633,7 +633,7 @@ impl Site {
 
     fn build_wikilinks(&mut self) {
         if self.config.markdown.wikilinks {
-            self.wikilinks = build_wikilinks(&self.library);
+            self.wikilinks = build_wikilinks(&self.library, &self.taxonomies);
         } else {
             self.wikilinks = WikilinkResolver::default();
         }
