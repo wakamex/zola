@@ -15,7 +15,7 @@ use utils::slugs::slugify_anchors;
 use utils::table_of_contents::{Heading, make_table_of_contents};
 use utils::types::InsertAnchor;
 
-use crate::{MarkdownContext, WikilinkError};
+use crate::{MarkdownContext, ResolvedWikilink, WikilinkError};
 
 const CONTINUE_READING: &str = "<span id=\"continue-reading\"></span>";
 static EMOJI_REPLACER: LazyLock<EmojiReplacer> = LazyLock::new(EmojiReplacer::new);
@@ -422,12 +422,17 @@ impl<'a> State<'a> {
                 None => (link, None),
             };
             match ctx.wikilinks.resolve(key) {
-                Ok(md_path) => {
-                    let permalink = &ctx.permalinks[md_path];
-                    self.internal_links.push((md_path.to_string(), anchor.clone()));
+                Ok(resolved) => {
+                    let permalink = match resolved {
+                        ResolvedWikilink::Content(md_path) => {
+                            self.internal_links.push((md_path.to_string(), anchor.clone()));
+                            &ctx.permalinks[md_path]
+                        }
+                        ResolvedWikilink::Output(permalink) => permalink,
+                    };
                     match anchor {
                         Some(a) => format!("{}#{}", permalink, a),
-                        None => permalink.clone(),
+                        None => permalink.to_string(),
                     }
                 }
                 Err(error) => {

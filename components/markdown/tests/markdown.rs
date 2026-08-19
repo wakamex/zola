@@ -500,11 +500,13 @@ fn wikilink_resolution() {
         "[[quickstart#install]]",
         "[[quickstart|Get Started]]",
         "[[start|Start alias]]",
+        "[[guides/source.pdf|Source]]",
     ];
 
     let res = common::render_with_config(&cases.join("\n"), config).unwrap();
     insta::assert_snapshot!(res.body);
     assert!(res.internal_links.contains(&("guides/quickstart.md".into(), Some("install".into()))));
+    assert!(!res.internal_links.iter().any(|(path, _)| path == "guides/source.pdf"));
 }
 
 #[test]

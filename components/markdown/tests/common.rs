@@ -23,10 +23,11 @@ fn configurable_render(
     ]);
 
     let wikilinks = WikilinkResolver::from_targets([
-        WikilinkTarget::new("guides/quickstart.md", vec!["/start/".to_string()]),
-        WikilinkTarget::new("about.md", Vec::new()),
-        WikilinkTarget::new("archive/duplicate.md", Vec::new()),
-        WikilinkTarget::new("guides/duplicate.md", Vec::new()),
+        WikilinkTarget::content("guides/quickstart.md", vec!["/start/".to_string()]),
+        WikilinkTarget::content("about.md", Vec::new()),
+        WikilinkTarget::content("archive/duplicate.md", Vec::new()),
+        WikilinkTarget::content("guides/duplicate.md", Vec::new()),
+        WikilinkTarget::output("guides/source.pdf", "/guides/source.pdf"),
     ]);
 
     tera.register_filter(
