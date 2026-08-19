@@ -1,74 +1,106 @@
-use std::path::Path;
+use content::Library;
+use utils::site::{WikilinkResolver, WikilinkTarget};
 
-use ahash::AHashMap;
-
-/// Build a lookup map from permalinks for wikilink resolution.
+/// Build a wikilink resolver from every renderable page and section in the library.
 ///
-/// For each entry in `permalinks` (relative_path -> permalink), we insert 2 things pointing to the full relative path.:
-/// 1. Full path without extension (eg `docs/overview`)
-/// 2. Bare stem (eg `overview`) if different from full path
-///
-/// If a stem is the same as the full path, the stem is ignored
-/// If a stem collides (multiple pages share it, eg _index in Zola), it won't be inserted and users
-/// can't refer to that stem in links.
-pub fn build_wikilinks(permalinks: &AHashMap<String, String>) -> AHashMap<String, String> {
-    let mut wikilinks = AHashMap::new();
-    let mut stems: AHashMap<String, Vec<&str>> = AHashMap::new();
-
-    for relative_path in permalinks.keys() {
-        let without_ext = relative_path.trim_end_matches(".md");
-        wikilinks.insert(without_ext.to_owned(), relative_path.clone());
-
-        let stem =
-            Path::new(without_ext).file_name().unwrap_or_default().to_string_lossy().into_owned();
-        if stem != without_ext {
-            stems.entry(stem).or_default().push(relative_path);
+/// The resolver preserves each content path and also reuses the aliases already declared in front
+/// matter. Bare stems are resolved only when they identify one content file.
+pub fn build_wikilinks(library: &Library) -> WikilinkResolver {
+    let pages = library.pages.values().filter(|page| page.meta.render).map(|page| WikilinkTarget {
+        source_path: page.file.relative.clone(),
+        permalink: page.permalink.clone(),
+        aliases: page.meta.aliases.clone(),
+    });
+    let sections = library.sections.values().filter(|section| section.meta.render).map(|section| {
+        WikilinkTarget {
+            source_path: section.file.relative.clone(),
+            permalink: section.permalink.clone(),
+            aliases: section.meta.aliases.clone(),
         }
-    }
-
-    for (stem, md_paths) in &stems {
-        // Don't overwrite a full-path entry with a bare stem
-        if wikilinks.contains_key(stem) {
-            continue;
-        }
-        if md_paths.len() == 1 {
-            wikilinks.insert(stem.clone(), md_paths[0].to_owned());
-        } else {
-            log::warn!("Multiple files with the name `{stem}`, use the full path to link to them");
-        }
-    }
-
-    wikilinks
+    });
+    WikilinkResolver::from_targets(pages.chain(sections))
 }
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
+    use config::Config;
+    use content::{Library, Page, PageFrontMatter};
+    use utils::site::WikilinkError;
+
     use super::*;
+
+    fn assert_resolves(resolver: &WikilinkResolver, target: &str, expected: &str) {
+        assert_eq!(resolver.resolve(target).unwrap().md_path, expected);
+    }
+
+    fn page(path: &str, permalink: &str, aliases: &[&str]) -> Page {
+        let mut page = Page::new(
+            Path::new(&format!("content/{path}")),
+            PageFrontMatter::default(),
+            Path::new(""),
+        );
+        page.file.relative = path.to_string();
+        page.permalink = permalink.to_string();
+        page.meta.aliases = aliases.iter().map(|alias| alias.to_string()).collect();
+        page
+    }
 
     #[test]
     fn build_wikilinks_lookups() {
-        let permalinks = AHashMap::from_iter([
-            ("blog/overview.md".to_string(), "/blog/overview/".to_string()),
-            ("docs/overview.md".to_string(), "/docs/overview/".to_string()),
-            ("about.md".to_string(), "/about/".to_string()),
-            ("blog/_index.md".to_string(), "/blog/".to_string()),
-            ("_index.md".to_string(), "/".to_string()),
-            ("guides/quickstart.md".to_string(), "/guides/quickstart/".to_string()),
-        ]);
-        let wl = build_wikilinks(&permalinks);
+        let config = Config::default_for_test();
+        let mut library = Library::new(&config);
+        library.insert_page(page("blog/overview.md", "/blog/overview/", &[]));
+        library.insert_page(page("docs/overview.md", "/docs/overview/", &[]));
+        library.insert_page(page("about.md", "/about/", &[]));
+        library.insert_page(page("blog/_index.md", "/blog/", &[]));
+        library.insert_page(page("_index.md", "/", &[]));
+        library.insert_page(page("guides/quickstart.md", "/guides/quickstart/", &["/start/"]));
 
-        // Full paths always resolve
-        assert_eq!(wl.get("blog/overview"), Some(&"blog/overview.md".to_string()));
-        assert_eq!(wl.get("docs/overview"), Some(&"docs/overview.md".to_string()));
-        assert_eq!(wl.get("about"), Some(&"about.md".to_string()));
-        assert_eq!(wl.get("blog/_index"), Some(&"blog/_index.md".to_string()));
-        assert_eq!(wl.get("_index"), Some(&"_index.md".to_string()));
-        assert_eq!(wl.get("guides/quickstart"), Some(&"guides/quickstart.md".to_string()));
-        assert_eq!(wl.get("quickstart"), Some(&"guides/quickstart.md".to_string()));
-        assert_eq!(wl.get("overview"), None);
-        // not blog/_index.md, relative path has precedence over stem
-        assert_eq!(wl.get("_index"), Some(&"_index.md".to_string()));
-        // Relative path and stem being equal should only be inserted once
-        assert_eq!(wl.values().filter(|v| *v == "about.md").count(), 1);
+        let resolver = build_wikilinks(&library);
+
+        // Full paths always resolve.
+        assert_resolves(&resolver, "blog/overview", "blog/overview.md");
+        assert_resolves(&resolver, "docs/overview", "docs/overview.md");
+        assert_resolves(&resolver, "about", "about.md");
+        assert_resolves(&resolver, "blog/_index", "blog/_index.md");
+        assert_resolves(&resolver, "guides/quickstart", "guides/quickstart.md");
+
+        // Unique stems and aliases resolve to the same content path.
+        assert_resolves(&resolver, "quickstart", "guides/quickstart.md");
+        assert_resolves(&resolver, "start", "guides/quickstart.md");
+
+        // An exact path takes precedence over the colliding blog/_index.md stem.
+        assert_resolves(&resolver, "_index", "_index.md");
+
+        // A path whose stem is the whole path remains a single, unambiguous target.
+        assert_resolves(&resolver, "about", "about.md");
+
+        // Colliding bare stems report every path rather than resolving arbitrarily.
+        assert_eq!(
+            resolver.resolve("overview"),
+            Err(WikilinkError::Ambiguous {
+                candidates: vec!["blog/overview.md".to_string(), "docs/overview.md".to_string(),],
+            })
+        );
+    }
+
+    #[test]
+    fn reports_every_candidate_for_an_ambiguous_stem() {
+        let config = Config::default_for_test();
+        let mut library = Library::new(&config);
+        library.insert_page(page("guides/duplicate.md", "/guides/duplicate/", &[]));
+        library.insert_page(page("archive/duplicate.md", "/archive/duplicate/", &[]));
+
+        assert_eq!(
+            build_wikilinks(&library).resolve("duplicate"),
+            Err(WikilinkError::Ambiguous {
+                candidates: vec![
+                    "archive/duplicate.md".to_string(),
+                    "guides/duplicate.md".to_string(),
+                ],
+            })
+        );
     }
 }
