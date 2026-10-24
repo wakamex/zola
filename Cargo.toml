@@ -16,7 +16,7 @@ include = ["src/**/*", "LICENSE", "README.md"]
 members = ["components/*"]
 
 [workspace.package]
-version = "0.23.3"
+version = "0.23.6"
 edition = "2024"
 
 [build-dependencies]
@@ -81,10 +81,11 @@ ammonia = "4"
 anstream = "1"
 anstyle = "1"
 avif-parse = "2"
-base64 = "0.22"
+base64 = "0.23"
 csv = "1"
 elasticlunr-rs = { version = "3.0.2", features = ["da", "no", "de", "du", "es", "fi", "fr", "hu", "it", "pt", "ro", "ru", "sv", "tr", "ko"] }
 ego-tree = "0.11"
+fast_image_resize = { version = "6", features = ["image"] }
 filetime = "0.2"
 gh-emoji = "1"
 globset = "0.4"
@@ -111,7 +112,7 @@ sha2 = "0.11"
 scraper = { version = "0.27", default-features = false }
 slug = "0.1"
 svg_metadata = "0.6"
-tera = {version = "2.0.0", features = ["fast", "glob_fs"] }
+tera = {version = "2.0.0", features = ["fast", "glob_fs", "preserve_order"] }
 time = "0.3"
 toml = "0.9"
 unic-langid = "0.9"

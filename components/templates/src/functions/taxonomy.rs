@@ -1,26 +1,63 @@
 use std::sync::Arc;
 
+use ahash::AHashMap;
+use content::Taxonomy;
 use render::RenderCache;
 use tera::{Error, Function, Kwargs, State, TeraResult, Value};
 use utils::slugs::{SlugifyStrategy, slugify_paths};
 
+/// (language -> (taxonomy slug -> (term slug -> permalink)))
+type TaxonomyUrls = AHashMap<String, AHashMap<String, AHashMap<String, String>>>;
+/// (language -> (taxonomy name -> taxonomy slug))
+/// only if slug != name
+type TaxonomySlugs = AHashMap<String, AHashMap<String, String>>;
+
+/// We don't use the cache in this one so it resolves fine when templating content
 #[derive(Debug)]
 pub struct GetTaxonomyUrl {
-    cache: Arc<RenderCache>,
+    urls: TaxonomyUrls,
+    slugs: TaxonomySlugs,
     default_lang: String,
     slugify: SlugifyStrategy,
 }
 
 impl GetTaxonomyUrl {
-    pub fn new(default_lang: &str, cache: Arc<RenderCache>, slugify: SlugifyStrategy) -> Self {
-        Self { cache, default_lang: default_lang.to_string(), slugify }
+    pub fn new(default_lang: &str, taxonomies: &[Taxonomy], slugify: SlugifyStrategy) -> Self {
+        let mut urls = TaxonomyUrls::new();
+        let mut slugs = TaxonomySlugs::new();
+        for taxonomy in taxonomies {
+            let terms = taxonomy
+                .items
+                .iter()
+                .map(|term| (term.slug.clone(), term.permalink.clone()))
+                .collect();
+            urls.entry(taxonomy.lang.clone()).or_default().insert(taxonomy.slug.clone(), terms);
+
+            if taxonomy.slug != taxonomy.kind.name {
+                slugs
+                    .entry(taxonomy.lang.clone())
+                    .or_default()
+                    .insert(taxonomy.kind.name.clone(), taxonomy.slug.clone());
+            }
+        }
+
+        Self { urls, slugs, default_lang: default_lang.to_string(), slugify }
+    }
+
+    fn lookup(&self, lang: &str, kind: &str) -> Option<&AHashMap<String, String>> {
+        let taxonomies = self.urls.get(lang)?;
+        if let Some(terms) = taxonomies.get(kind) {
+            return Some(terms);
+        }
+        taxonomies.get(self.slugs.get(lang)?.get(kind)?)
     }
 }
 
 impl Default for GetTaxonomyUrl {
     fn default() -> Self {
         Self {
-            cache: Arc::new(RenderCache::default()),
+            urls: AHashMap::new(),
+            slugs: AHashMap::new(),
             default_lang: String::new(),
             slugify: SlugifyStrategy::default(),
         }
@@ -44,8 +81,8 @@ impl Function<TeraResult<Value>> for GetTaxonomyUrl {
             kwargs.get("lang")?.or(state.get("lang")?).unwrap_or_else(|| self.default_lang.clone());
         let required: bool = kwargs.get("required")?.unwrap_or(true);
 
-        let cached = match (self.cache.get_taxonomy(&lang, kind), required) {
-            (Some(c), _) => c,
+        let terms = match (self.lookup(&lang, kind), required) {
+            (Some(terms), _) => terms,
             (None, false) => return Ok(Value::none()),
             (None, true) => {
                 return Err(Error::message(format!(
@@ -56,11 +93,8 @@ impl Function<TeraResult<Value>> for GetTaxonomyUrl {
         };
 
         let slug = slugify_paths(term, self.slugify);
-        if let Some(t) = cached.terms.get(&slug)
-            && let Some(map) = t.as_map()
-            && let Some(permalink) = map.get(&"permalink".into()).and_then(|v| v.as_str())
-        {
-            return Ok(Value::from(permalink));
+        if let Some(permalink) = terms.get(&slug) {
+            return Ok(Value::from(permalink.as_str()));
         }
 
         Err(Error::message(format!(
@@ -170,6 +204,7 @@ mod tests {
     use config::{Config, TaxonomyConfig};
     use content::{Library, Taxonomy, TaxonomyTerm};
     use render::RenderCache;
+    use tera::value::Key;
     use tera::{Context, Kwargs, Tera};
     use utils::slugs::SlugifyStrategy;
 
@@ -225,31 +260,31 @@ mod tests {
         let ctx = Context::new();
         let res = get_taxonomy.call(kwargs, &State::new(&ctx)).unwrap();
         let res_obj = res.as_map().unwrap();
-        let items = res_obj.get(&"items".into()).unwrap().as_array().unwrap();
+        let items = res_obj.get(&Key::from("items")).unwrap().as_array().unwrap();
         assert_eq!(items.len(), 1);
         let item = items[0].as_map().unwrap();
-        assert_eq!(item.get(&"name".into()).unwrap().as_str().unwrap(), "Programming");
-        assert_eq!(item.get(&"slug".into()).unwrap().as_str().unwrap(), "programming");
+        assert_eq!(item.get(&Key::from("name")).unwrap().as_str().unwrap(), "Programming");
+        assert_eq!(item.get(&Key::from("slug")).unwrap().as_str().unwrap(), "programming");
 
         // Works with other languages as well (lang in context)
         let kwargs = Kwargs::from([("kind", Value::from("tags"))]);
         let ctx = make_context_with_lang("fr");
         let res = get_taxonomy.call(kwargs, &State::new(&ctx)).unwrap();
         let res_obj = res.as_map().unwrap();
-        let items = res_obj.get(&"items".into()).unwrap().as_array().unwrap();
+        let items = res_obj.get(&Key::from("items")).unwrap().as_array().unwrap();
         assert_eq!(items.len(), 1);
         let item = items[0].as_map().unwrap();
-        assert_eq!(item.get(&"name".into()).unwrap().as_str().unwrap(), "Programmation");
+        assert_eq!(item.get(&Key::from("name")).unwrap().as_str().unwrap(), "Programmation");
 
         // kwargs lang takes priority over state lang
         let kwargs = Kwargs::from([("kind", Value::from("tags")), ("lang", Value::from("en"))]);
         let ctx = make_context_with_lang("fr");
         let res = get_taxonomy.call(kwargs, &State::new(&ctx)).unwrap();
         let res_obj = res.as_map().unwrap();
-        let items = res_obj.get(&"items".into()).unwrap().as_array().unwrap();
+        let items = res_obj.get(&Key::from("items")).unwrap().as_array().unwrap();
         assert_eq!(items.len(), 1);
         let item = items[0].as_map().unwrap();
-        assert_eq!(item.get(&"name".into()).unwrap().as_str().unwrap(), "Programming");
+        assert_eq!(item.get(&Key::from("name")).unwrap().as_str().unwrap(), "Programming");
 
         // and errors if it can't find it
         let kwargs = Kwargs::from([("kind", Value::from("something-else"))]);
@@ -268,7 +303,6 @@ mod tests {
         };
         let taxo_config_fr = taxo_config.clone();
         config.slugify_taxonomies();
-        let library = Library::new(&config);
         let tag =
             TaxonomyTerm::new("Programming", &config.default_language, &taxo_config, &[], &config)
                 .unwrap();
@@ -292,12 +326,8 @@ mod tests {
         };
 
         let taxonomies = vec![tags, tags_fr];
-        let tera = Tera::default();
-        let mut cache = RenderCache::new(&config);
-        cache.build(&library, &taxonomies, &tera);
-        let cache = Arc::new(cache);
         let get_taxonomy_url =
-            GetTaxonomyUrl::new(&config.default_language, cache, config.slugify.taxonomies);
+            GetTaxonomyUrl::new(&config.default_language, &taxonomies, config.slugify.taxonomies);
 
         // can find it correctly (default lang)
         let kwargs =
@@ -398,8 +428,8 @@ mod tests {
         let ctx = Context::new();
         let res = get_taxonomy_term.call(kwargs, &State::new(&ctx)).unwrap();
         let res_obj = res.as_map().unwrap();
-        assert_eq!(res_obj.get(&"name".into()).unwrap().as_str().unwrap(), "Programming");
-        assert_eq!(res_obj.get(&"slug".into()).unwrap().as_str().unwrap(), "programming");
+        assert_eq!(res_obj.get(&Key::from("name")).unwrap().as_str().unwrap(), "Programming");
+        assert_eq!(res_obj.get(&Key::from("slug")).unwrap().as_str().unwrap(), "programming");
 
         // Works with other languages as well (lang in context)
         let kwargs =
@@ -407,7 +437,7 @@ mod tests {
         let ctx = make_context_with_lang("fr");
         let res = get_taxonomy_term.call(kwargs, &State::new(&ctx)).unwrap();
         let res_obj = res.as_map().unwrap();
-        assert_eq!(res_obj.get(&"name".into()).unwrap().as_str().unwrap(), "Programmation");
+        assert_eq!(res_obj.get(&Key::from("name")).unwrap().as_str().unwrap(), "Programmation");
 
         // kwargs lang takes priority over state lang
         let kwargs = Kwargs::from([
@@ -418,7 +448,7 @@ mod tests {
         let ctx = make_context_with_lang("fr");
         let res = get_taxonomy_term.call(kwargs, &State::new(&ctx)).unwrap();
         let res_obj = res.as_map().unwrap();
-        assert_eq!(res_obj.get(&"name".into()).unwrap().as_str().unwrap(), "Programming");
+        assert_eq!(res_obj.get(&Key::from("name")).unwrap().as_str().unwrap(), "Programming");
 
         // and errors if it can't find either taxonomy or term
         let kwargs = Kwargs::from([
@@ -439,7 +469,65 @@ mod tests {
         let ctx = Context::new();
         let res = get_taxonomy_term.call(kwargs, &State::new(&ctx)).unwrap();
         let res_obj = res.as_map().unwrap();
-        assert_eq!(res_obj.get(&"name".into()).unwrap().as_str().unwrap(), "acción");
-        assert_eq!(res_obj.get(&"slug".into()).unwrap().as_str().unwrap(), "accion");
+        assert_eq!(res_obj.get(&Key::from("name")).unwrap().as_str().unwrap(), "acción");
+        assert_eq!(res_obj.get(&Key::from("slug")).unwrap().as_str().unwrap(), "accion");
+    }
+
+    // https://github.com/getzola/zola/issues/3272
+    #[test]
+    fn taxonomies_functions_work_with_slug_or_name() {
+        let mut config = Config::default_for_test();
+        config.slugify.taxonomies = SlugifyStrategy::On;
+        let taxo_config = TaxonomyConfig {
+            name: "coverage_type".to_string(),
+            slug: "coverage-type".to_string(),
+            ..TaxonomyConfig::default()
+        };
+        config.slugify_taxonomies();
+
+        let library = Library::new(&config);
+        let term =
+            TaxonomyTerm::new("Programming", &config.default_language, &taxo_config, &[], &config)
+                .unwrap();
+        let taxonomy = Taxonomy {
+            kind: taxo_config,
+            lang: config.default_language.clone(),
+            slug: "coverage-type".to_string(),
+            path: "/coverage-type/".to_string(),
+            permalink: "https://vincent.is/coverage-type/".to_string(),
+            items: vec![term],
+        };
+        let taxonomies = vec![taxonomy];
+        let tera = Tera::default();
+        let mut cache = RenderCache::new(&config);
+        cache.build(&library, &taxonomies, &tera);
+        let cache = Arc::new(cache);
+        let get_taxonomy = GetTaxonomy::new(&config.default_language, cache.clone());
+        let get_taxonomy_term =
+            GetTaxonomyTerm::new(&config.default_language, cache, config.slugify.taxonomies);
+        let get_taxonomy_url =
+            GetTaxonomyUrl::new(&config.default_language, &taxonomies, config.slugify.taxonomies);
+        let ctx = Context::new();
+        for kind in ["coverage_type", "coverage-type"] {
+            let kwargs = Kwargs::from([("kind", Value::from(kind))]);
+            let res = get_taxonomy.call(kwargs, &State::new(&ctx)).unwrap();
+            let items = res.as_map().unwrap().get(&Key::from("items")).unwrap().as_array().unwrap();
+            assert_eq!(items.len(), 1, "get_taxonomy failed for kind={}", kind);
+
+            let kwargs =
+                Kwargs::from([("kind", Value::from(kind)), ("term", Value::from("Programming"))]);
+            let res = get_taxonomy_term.call(kwargs, &State::new(&ctx)).unwrap();
+            assert_eq!(
+                res.as_map().unwrap().get(&Key::from("name")).unwrap().as_str().unwrap(),
+                "Programming"
+            );
+
+            let kwargs =
+                Kwargs::from([("kind", Value::from(kind)), ("term", Value::from("Programming"))]);
+            assert_eq!(
+                get_taxonomy_url.call(kwargs, &State::new(&ctx)).unwrap().as_str().unwrap(),
+                "http://a-website.com/coverage-type/programming/"
+            );
+        }
     }
 }

@@ -3,17 +3,17 @@
 title = "Zolarwind"
 description = "A GDPR-friendly Zola blog theme: no third-party requests, Tailwind CSS, KaTeX, Mermaid, localization"
 template = "theme.html"
-date = 2026-08-09T16:33:18+02:00
+date = 2026-09-13T18:34:10+02:00
 
 [taxonomies]
 theme-tags = []
 
 [extra]
-created = 2026-08-09T16:33:18+02:00
-updated = 2026-08-09T16:33:18+02:00
+created = 2026-09-13T18:34:10+02:00
+updated = 2026-09-13T18:34:10+02:00
 repository = "https://github.com/thomasweitzel/zolarwind.git"
 homepage = "https://github.com/thomasweitzel/zolarwind"
-minimum_version = "0.23.2"
+minimum_version = "0.23.5"
 license = "MIT"
 demo = "https://weitzel.dev"
 
@@ -58,9 +58,15 @@ Localization is built-in for a single-locale build.
 
 ## Important Note
 
-As of Zola v0.23.2 from 2026-08-07, Giallo dark/light theme CSS generation works correctly again.
-The theme needs this to work properly.
-This theme is not compatible with Zola v0.23.1 and earlier.
+As of Zola v0.23.5, released on 2026-09-12, Zolarwind's locale-specific `settings_date_format` values are no longer
+compatible with Zola's date filter. Zola v0.23.5 updates Tera to v2.3.0, which includes tera-contrib v0.3.0.
+
+The tera-contrib v0.3.0 changelog describes the relevant change as: "Add `locale` parameter to `date` filter using
+UTS-35 datetime patterns."
+
+As a result, locale-specific date formats now use UTS-35 patterns instead of the strftime patterns previously used by
+Zolarwind. Zolarwind's date format settings have therefore been updated accordingly. This change is required for the
+theme to work with Zola v0.23.5, but makes it incompatible with earlier Zola versions.
 
 ---
 
@@ -325,13 +331,13 @@ image = "banner.jpg"
   Tags are shown on posts and tag index pages, series are shown on series pages and the series navigation at the bottom of series posts.
 
 - **extra.math**: either `false` (default) or `true`.
-  If set to `true`, the post will be rendered with KaTeX support for displaying math formulas.
+  If set to `true`, the post will be rendered with KaTeX support for inline and display math formulas.
   If the entry is omitted or set to `false`, the post will not have KaTeX support.
-  Use `$...$` for inline math. Because Markdown processes backslashes first, write `\\%` when KaTeX must receive `\%` for a percent sign.
-  Use the KaTeX component for display math and omit `$$` delimiters inside its body:
+  Use the KaTeX component and omit `$`, `$$`, `\(`, and `\[` delimiters inside its body. Use `inline={true}` for inline math:
 
   ```text
   {%/* <katex> */%} a^2 + b^2 {%/* </katex> */%}
+  {%/* <katex inline={true}> */%} E = mc^2 {%/* </katex> */%}
   ```
 
 - **extra.diagram**: either `false` (default) or `true`.
@@ -386,7 +392,7 @@ Note: If no posts use the `series` taxonomy, Zola does not generate `/series/`, 
 Zolarwind provides Markdown-facing components, stored in `templates/shortcodes/`. Use them when you want the feature, not as formatting helpers.
 Full documentation with parameters and examples: `docs/shortcodes.md`.
 
-- **katex**: render display KaTeX math.
+- **katex**: render inline or display KaTeX math.
 - **diagram**: render Mermaid diagrams from fenced text blocks.
 - **image**: render local images with captions and optional light/dark variants.
 - **audio_simple**: native `<audio>` player in a themed card.
@@ -452,7 +458,9 @@ To localize your blog with this theme:
 This theme uses `default_language` as a build-time switch for a single locale per build.
 It does not target Zola's multi-language output in a single build.
 
-If you need to define your own date format, look [here](https://docs.rs/chrono/latest/chrono/format/strftime/index.html) for supported specifiers.
+If you need to define your own date format,
+look [here](https://unicode.org/reports/tr35/tr35-dates.html?utm_source=chatgpt.com#table-date-field-symbol-table) for
+supported specifiers.
 
 ---
 

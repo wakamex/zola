@@ -1,6 +1,7 @@
 use ahash::AHashMap;
 use config::Config;
 use markdown::{MarkdownContext, render_content};
+use tera::value::Key;
 use tera::{Error, Filter, Kwargs, State, TeraResult, Value};
 use utils::site::WikilinkResolver;
 use utils::types::InsertAnchor;
@@ -42,12 +43,15 @@ impl Filter<&str, TeraResult<String>> for MarkdownFilter {
             .and_then(|v| v.as_map())
             .map(|map| {
                 let path = map
-                    .get(&"relative_path".into())
+                    .get(&Key::from("relative_path"))
                     .and_then(|v| v.as_str())
                     .unwrap_or("")
                     .to_string();
-                let permalink =
-                    map.get(&"permalink".into()).and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let permalink = map
+                    .get(&Key::from("permalink"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
                 let lang = state
                     .get::<String>("lang")
                     .ok()

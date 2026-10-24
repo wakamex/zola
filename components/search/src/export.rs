@@ -241,7 +241,7 @@ fn page_record(page: &Page) -> Option<ContentRecord> {
         source: page.file.relative.clone(),
         url: page.path.clone(),
         title,
-        taxonomies: sorted_taxonomies(&page.meta.taxonomies),
+        taxonomies: page.meta.taxonomies.clone(),
         sections,
     })
 }
@@ -298,12 +298,6 @@ fn parse_sections(html: &str) -> Vec<ContentSection> {
     }
 
     collector.finish()
-}
-
-fn sorted_taxonomies(
-    taxonomies: &std::collections::HashMap<String, Vec<String>>,
-) -> BTreeMap<String, Vec<String>> {
-    taxonomies.iter().map(|(name, terms)| (name.clone(), terms.clone())).collect()
 }
 
 fn display_slug(slug: &str) -> String {

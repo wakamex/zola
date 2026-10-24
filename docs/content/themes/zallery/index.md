@@ -3,17 +3,17 @@
 title = "zallery"
 description = "Gallery theme for zola"
 template = "theme.html"
-date = 2025-07-14T19:59:26-05:00
+date = 2026-09-28T23:17:26-05:00
 
 [taxonomies]
 theme-tags = []
 
 [extra]
-created = 2025-07-14T19:59:26-05:00
-updated = 2025-07-14T19:59:26-05:00
+created = 2026-09-28T23:17:26-05:00
+updated = 2026-09-28T23:17:26-05:00
 repository = "https://github.com/gamingrobot/zallery.git"
 homepage = "https://github.com/gamingrobot/zallery"
-minimum_version = "0.19.0"
+minimum_version = "0.23.6"
 license = "MIT"
 demo = "https://gamingrobot.github.io/zallery-demo"
 
@@ -27,7 +27,7 @@ homepage = "https://creekmore.dev"
 Gallery and portfolio theme for [Zola](https://getzola.org).
 
 Demo Site: [gamingrobot.github.io/zallery-demo](https://gamingrobot.github.io/zallery-demo/)  
-Personal Portfolio: [gamingrobot.art](https://gamingrobot.art/)
+Personal Portfolio: [grbt.art](https://grbt.art/)
 
 ## Screenshots
 
@@ -200,7 +200,7 @@ goatcounter = ""
 ### `img`
 
 ```jinja2
-{{/* img(src="image.jpg", mobile_src="image-mobile.jpg", alt="alt text", text="text", fit="") */}}
+{{/* <img src="image.jpg" mobile_src="image-mobile.jpg" alt="alt text" text="text" fit=""/> */}}
 ```
 
 - `src` (required) - Image path
@@ -212,18 +212,18 @@ goatcounter = ""
 ### `video`
 
 ```jinja2
-{{/* video(src="image.jpg", autoplay=false) */}}
+{{/* <video src="image.jpg" autoplay={true}/> */}}
 ```
 
 - `src` (required) - Video path
+- `text` (optional) - Text to put under the video
 - `autoplay` (optional) - Set to `true` to enable autoplay
-- `loop` (optional) - Set to `true` to enable looping
 
 ### `youtube` / `vimeo`
 
 ```jinja2
-{{/* youtube(id="", autoplay=false) */}}
-{{/* vimeo(id="", autoplay=false) */}}
+{{/* <youtube id="" autoplay={true}/> */}}
+{{/* <vimeo id="" autoplay={true}/> */}}
 ```
 
 - `id` (required) - Id of the video
@@ -234,7 +234,7 @@ goatcounter = ""
 Note: Requires `modelviewer` to be enabled in `config.toml`
 
 ```jinja2
-{{/* model(src="image.jpg", skybox="", poster="") */}}
+{{/* <model src="image.jpg" skybox="" poster=""/> */}}
 ```
 
 - `src` (required) - Model path
@@ -245,7 +245,7 @@ Note: Requires `modelviewer` to be enabled in `config.toml`
 ### `sketchfab`
 
 ```jinja2
-{{/* sketchfab(id="") */}}
+{{/* <sketchfab id=""/> */}}
 ```
 
 - `id` (required) - Id of the model

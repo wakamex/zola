@@ -3,19 +3,19 @@
 title = "photography theme"
 description = "a photography portfolio theme with many features, including an AI blocker"
 template = "theme.html"
-date = 2026-05-29T09:54:48+02:00
+date = 2026-10-08T11:41:09+02:00
 
 [taxonomies]
 theme-tags = ['Blog', 'portfolio', 'photography', 'SEO']
 
 [extra]
-created = 2026-05-29T09:54:48+02:00
-updated = 2026-05-29T09:54:48+02:00
+created = 2026-10-08T11:41:09+02:00
+updated = 2026-10-08T11:41:09+02:00
 repository = "https://codeberg.org/arbs09/photography-theme.git"
 homepage = "https://codeberg.org/arbs09/photography-theme"
-minimum_version = "0.19.2"
+minimum_version = "0.23.6"
 license = "MIT"
-demo = ""
+demo = "https://simplesnap.de"
 
 [extra.author]
 name = "arbs09"

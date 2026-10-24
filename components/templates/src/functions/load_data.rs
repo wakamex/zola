@@ -299,7 +299,7 @@ impl Function<TeraResult<Value>> for LoadData {
                 // source is None only with path_arg (not URL), so path_arg is safely unwrap
                 return Err(Error::message(format!(
                     "`load_data`: {} doesn't exist",
-                    &self.base_path.join(path_arg.unwrap()).display()
+                    self.base_path.join(path_arg.unwrap()).display()
                 )));
             }
             (Ok(Some(data_source)), _) => data_source,
@@ -343,7 +343,7 @@ impl Function<TeraResult<Value>> for LoadData {
                                 Err(_) => {
                                     return Err(Error::message(format!(
                                         "`load_data`: {} is an illegal content type",
-                                        &content_type
+                                        content_type
                                     )));
                                 }
                             }
@@ -582,6 +582,7 @@ mod tests {
     use fs_err as fs;
     use serde_json::json;
     use tempfile::tempdir;
+    use tera::value::Key;
     use tera::{Context, Function, Kwargs, State, Value};
 
     // NOTE: HTTP mock paths below are randomly generated to avoid name
@@ -893,9 +894,9 @@ mod tests {
         let ctx = Context::new();
         let result = static_fn.call(kwargs, &State::new(&ctx)).unwrap();
         let map = result.as_map().unwrap();
-        let test = map.get(&"test".into()).unwrap();
+        let test = map.get(&Key::from("test")).unwrap();
         let test_map = test.as_map().unwrap();
-        let foo = test_map.get(&"foo".into()).unwrap();
+        let foo = test_map.get(&Key::from("foo")).unwrap();
         assert_eq!(foo, &Value::from("bar"));
     }
 
@@ -974,9 +975,9 @@ mod tests {
         let ctx = Context::new();
         let result = static_fn.call(kwargs, &State::new(&ctx)).unwrap();
         let map = result.as_map().unwrap();
-        let test = map.get(&"test".into()).unwrap();
+        let test = map.get(&Key::from("test")).unwrap();
         let test_map = test.as_map().unwrap();
-        let foo = test_map.get(&"foo".into()).unwrap();
+        let foo = test_map.get(&Key::from("foo")).unwrap();
         assert_eq!(foo, &Value::from("bar"));
     }
 

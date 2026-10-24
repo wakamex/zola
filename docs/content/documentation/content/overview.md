@@ -41,12 +41,37 @@ Sections can be nested indefinitely.
 Every page/section of your site is also a [Tera](https://keats.github.io/tera/) template.
 This means you can use any features of Tera in your content (even functions like `resize_image`), not just the shortcode band-aid from before 0.23.
 
+Since templating is done before parsing the CommonMark content, some attributes lik `content`, `summary` and `toc` will be empty while rendering.
+Fields depending on other pages (like `backlinks`, `translations`, `subsections` etc) will also be empty.
+
 See the [Tera migration guide](https://github.com/Keats/tera/blob/master/MIGRATION.md) if you're updating to 0.23 or higher.
 
 ### Migrating from shortcodes
 
 Shortcodes have been removed in 0.23. The closest feature available now is [Tera components](https://keats.github.io/tera/#components).
 These components can be used in your content but also in your templates, unlike shortcodes.
+
+`page`, `config` etc are not available automatically in the components: use implicit parameters on the component
+you want to use in your content if you need them.
+
+```j2
+{% raw -%}
+{% component something(@config) %}
+...
+{% endcomponent %}
+{%- raw %}
+```
+### Avoiding template compilation error
+
+Since all content is now potentially a template, you might have compilation errors if you have sigils like {% raw %}`{{`/`{%`{% endraw %} in your content.
+
+You have 2 ways of fixing it:
+
+1. If you don't need templating/components in your content, set the `skip_content_templating` option from the config file to match all content files
+2. Wrap the offending lines in {{ "`{% raw %}{% endraw %}`" }} so they are ignored
+
+This documentation site uses both approaches, you can always look at the [source](https://github.com/getzola/zola/tree/master/docs/content/documentation)
+since it does have a lot of Tera code in it.
 
 ## Asset colocation
 

@@ -3,19 +3,19 @@
 title = "Bear"
 description = "Bear blog theme"
 template = "theme.html"
-date = 2026-04-28T23:11:23+02:00
+date = 2026-10-03T11:35:53+02:00
 
 [taxonomies]
 theme-tags = []
 
 [extra]
-created = 2026-04-28T23:11:23+02:00
-updated = 2026-04-28T23:11:23+02:00
+created = 2026-10-03T11:35:53+02:00
+updated = 2026-10-03T11:35:53+02:00
 repository = "https://codeberg.org/alanpearce/zola-bearblog.git"
 homepage = "https://codeberg.org/alinnow/zola-bearblog"
-minimum_version = "0.4.0"
+minimum_version = "0.23.0"
 license = "MIT"
-demo = "https://zola-bearblog.alin.ovh/"
+demo = "https://alinnow.codeberg.page/zola-bearblog/"
 
 [extra.author]
 name = "Alin"
@@ -36,23 +36,17 @@ homepage = "https://alin.ovh"
 
 This theme has multiple demo sites, to provide examples of how to set up deployment.
 
-### Recommended
-
 - [Netlify](https://zola-bearblog.netlify.app/)
 - [Grebedoc](https://alanpearce.grebedoc.dev/zola-bearblog/)
 - [Codeberg Pages](https://alinnow.codeberg.page/zola-bearblog/)
 - [Gitlab Pages](https://alinnow.gitlab.io/zola-bearblog)
-
-### Not recommended
-
-These providers' build environments aren't yet compatible with Zola 0.21.0.
-- [Cloudflare Pages](https://zola-bearblog.pages.dev/)
+- [Cloudflare Pages](https://zola-bearblog.pages.dev/) - Use Build system Version 3 and set the variable `ZOLA_VERSION` ([documentation](https://developers.cloudflare.com/pages/configuration/build-image/))
 
 ## Screenshot
 
 ![Screenshot][screenshot]
 
-When the user's browser is running »dark mode«, the dark color scheme will be used automatically. The default is the light/white color scheme. Check out the [`style.html`](https://codeberg.org/alinnow/zola-bearblog/src/branch/main/templates/style.html)-file for the implementation.
+When the user's browser is running »dark mode«, the dark color scheme will be used automatically. The default is the light/white color scheme. Check out the [`style.css.html`](https://codeberg.org/alinnow/zola-bearblog/src/branch/main/templates/style.css.html)-file for the implementation.
 
 ## Installation
 
@@ -109,7 +103,7 @@ The contents of the `index`-page may be changed by editing your `content/_index.
 
 ### Adding your branding / colors / css
 
-Add a `custom_head.html`-file to your `templates/`-directory. In there you may add a `<style>`-tag, *or* you may add a `<link>`-tag referencing your own `custom.css` (in case you prefer to have a separate `.css`-file). Check out the [`style.html`](https://codeberg.org/alinnow/zola-bearblog/src/branch/main/templates/style.css.html)-file to find out which CSS-styles are applied by default.
+Add a `custom_head.html`-file to your `templates/`-directory. In there you may add a `<style>`-tag, *or* you may add a `<link>`-tag referencing your own `custom.css` (in case you prefer to have a separate `.css`-file). Check out the [`style.css.html`](https://codeberg.org/alinnow/zola-bearblog/src/branch/main/templates/style.css.html)-file to find out which CSS-styles are applied by default.
 
 ### Table of contents
 

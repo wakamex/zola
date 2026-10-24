@@ -3,17 +3,17 @@
 title = "Olivine"
 description = "A Zola theme for a personal knowledge base"
 template = "theme.html"
-date = 2025-12-22T10:21:49-08:00
+date = 2026-08-22T12:31:49+01:00
 
 [taxonomies]
 theme-tags = []
 
 [extra]
-created = 2025-12-22T10:21:49-08:00
-updated = 2025-12-22T10:21:49-08:00
+created = 2026-08-22T12:31:49+01:00
+updated = 2026-08-22T12:31:49+01:00
 repository = "https://github.com/dongryul-kim/olivine.git"
 homepage = "https://github.com/dongryul-kim/olivine"
-minimum_version = "0.20.0"
+minimum_version = "0.23.0"
 license = "MIT"
 demo = "https://dongryul-kim.github.io/olivine/"
 

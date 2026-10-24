@@ -42,6 +42,8 @@ pub struct RenderCache {
     pub configs: AHashMap<String, Value>,
     /// Cached taxonomies: lang -> (taxonomy_slug -> CachedTaxonomy)
     pub taxonomies: AHashMap<String, AHashMap<String, CachedTaxonomy>>,
+    /// Aliases for taxos: lang -> (taxonomy name -> taxonomy slug)
+    pub taxo_name_to_slug: AHashMap<String, AHashMap<String, String>>,
 }
 
 impl RenderCache {
@@ -183,7 +185,8 @@ impl RenderCache {
             }
         }
 
-        let cached_taxonomies: Vec<(_, _, _)> = taxonomies
+        let mut taxonomies_slug: AHashMap<_, AHashMap<_, _>> = AHashMap::new();
+        let cached_taxonomies: Vec<(_, _, _, _)> = taxonomies
             .iter()
             .map(|t| {
                 // Check for custom templates (None = use default, avoids allocation)
@@ -219,13 +222,19 @@ impl RenderCache {
                     list_template,
                 };
 
-                (t.lang.clone(), t.slug.clone(), cached)
+                (t.lang.clone(), t.kind.name.clone(), t.slug.clone(), cached)
             })
             .collect();
 
         let taxonomies = cached_taxonomies.into_iter().fold(
             AHashMap::<String, AHashMap<String, CachedTaxonomy>>::new(),
-            |mut acc, (lang, slug, cached)| {
+            |mut acc, (lang, name, slug, cached)| {
+                if slug != name {
+                    taxonomies_slug
+                        .entry(lang.clone())
+                        .or_default()
+                        .insert(name.clone(), slug.clone());
+                }
                 acc.entry(lang).or_default().insert(slug, cached);
                 acc
             },
@@ -236,9 +245,14 @@ impl RenderCache {
         self.pages_by_canonical = pages_by_canonical;
         self.sections_by_canonical = sections_by_canonical;
         self.taxonomies = taxonomies;
+        self.taxo_name_to_slug = taxonomies_slug;
     }
 
-    pub fn get_taxonomy(&self, lang: &str, slug: &str) -> Option<&CachedTaxonomy> {
-        self.taxonomies.get(lang)?.get(slug)
+    pub fn get_taxonomy(&self, lang: &str, kind: &str) -> Option<&CachedTaxonomy> {
+        let taxonomies = self.taxonomies.get(lang)?;
+        if let Some(terms) = taxonomies.get(kind) {
+            return Some(terms);
+        }
+        taxonomies.get(self.taxo_name_to_slug.get(lang)?.get(kind)?)
     }
 }

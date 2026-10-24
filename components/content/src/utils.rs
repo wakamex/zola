@@ -77,6 +77,7 @@ pub fn find_related_assets(
 ///     - knight.jpg
 ///     - subdir
 ///         - rook.jpg
+///
 /// This will output the following map:
 /// - content/gallery/knight.jpg -> (content/gallery/index.md, knight.jpg)
 /// - content/gallery/subdir/rook.jpg -> (content/gallery/index.md, subdir/rook.jpg)

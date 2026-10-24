@@ -1,6 +1,7 @@
 use std::fmt::Write as _;
 use std::io::Read;
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 
 use ahash::AHashMap;
 use base64::engine::{Engine, general_purpose::STANDARD as standard_b64};
@@ -40,6 +41,7 @@ pub struct GetUrl {
     permalinks: AHashMap<String, String>,
     output_path: PathBuf,
     colocated_assets: AHashMap<String, (String, String)>,
+    result_cache: Arc<Mutex<AHashMap<String, String>>>,
 }
 
 impl GetUrl {
@@ -50,7 +52,14 @@ impl GetUrl {
         output_path: PathBuf,
         colocated_assets: AHashMap<String, (String, String)>,
     ) -> Self {
-        Self { base_path, config, permalinks, output_path, colocated_assets }
+        Self {
+            base_path,
+            config,
+            permalinks,
+            output_path,
+            colocated_assets,
+            result_cache: Arc::new(Mutex::new(AHashMap::new())),
+        }
     }
 }
 
@@ -80,13 +89,13 @@ impl Function<TeraResult<String>> for GetUrl {
         let explicit_lang: Option<String> = kwargs.get("lang")?;
 
         // if it starts with @/, resolve it as an internal link
-        if path.starts_with("@/") {
+        if let Some(stripped) = path.strip_prefix("@/") {
             let lang: String = explicit_lang
                 .or(state.get("lang")?)
                 .unwrap_or_else(|| self.config.default_language.clone());
 
             // Check if it's a colocated asset first
-            if let Some((owner_md, rel)) = self.colocated_assets.get(&path[2..]) {
+            if let Some((owner_md, rel)) = self.colocated_assets.get(stripped) {
                 let owner_with_lang =
                     make_path_with_lang(format!("@/{}", owner_md), &lang, &self.config)?;
                 return match resolve_internal_link(&owner_with_lang, &self.permalinks) {
@@ -141,15 +150,21 @@ impl Function<TeraResult<String>> for GetUrl {
                     &self.output_path,
                 )
                 .map_err(|e| Error::message(format!("`get_url`: {}", e)))?
-                .and_then(|(p, _)| fs::File::open(p).ok())
-                .and_then(|mut f| {
+                .and_then(|(file_path, unified_path)| {
+                    let mut cache = self.result_cache.lock().expect("result cache lock");
+                    if let Some(hash) = cache.get(&unified_path) {
+                        return Some(hash.clone());
+                    }
+                    let mut f = fs::File::open(file_path).ok()?;
                     let mut contents = Vec::new();
                     f.read_to_end(&mut contents).ok()?;
-                    Some(compute_hash::<Sha256>(&contents, false))
+                    let hash = compute_hash::<Sha256>(&contents, false);
+                    cache.insert(unified_path, hash.clone());
+                    Some(hash)
                 }) {
                     Some(hash) => {
-                        let shorthash = &hash[..20]; // 2^-80 chance of false positive
-                        permalink = format!("{}?h={}", permalink, shorthash);
+                        let short_hash = &hash[..20]; // 2^-80 chance of false positive
+                        permalink = format!("{permalink}?h={short_hash}");
                     }
                     None => {
                         return Err(Error::message(format!(
@@ -174,11 +189,12 @@ pub struct GetHash {
     base_path: PathBuf,
     theme: Option<String>,
     output_path: PathBuf,
+    result_cache: Mutex<AHashMap<(String, u16, bool), String>>,
 }
 
 impl GetHash {
     pub fn new(base_path: PathBuf, theme: Option<String>, output_path: PathBuf) -> Self {
-        Self { base_path, theme, output_path }
+        Self { base_path, theme, output_path, result_cache: Mutex::new(AHashMap::new()) }
     }
 }
 
@@ -186,8 +202,13 @@ impl Function<TeraResult<String>> for GetHash {
     fn call(&self, kwargs: Kwargs, _: &State) -> TeraResult<String> {
         let path: Option<String> = kwargs.get("path")?;
         let literal: Option<String> = kwargs.get("literal")?;
+        let sha_type: u16 = kwargs.get("sha_type")?.unwrap_or(384);
+        if ![256, 384, 512].contains(&sha_type) {
+            return Err(Error::message("`get_hash`: Invalid sha value"));
+        }
+        let base64: bool = kwargs.get("base64")?.unwrap_or(true);
 
-        let contents = match (path, literal) {
+        let (contents, cache_key) = match (path, literal) {
             (Some(_), Some(_)) => {
                 return Err(Error::message(
                     "`get_hash`: must have only one of `path` or `literal` argument",
@@ -199,42 +220,51 @@ impl Function<TeraResult<String>> for GetHash {
                 ));
             }
             (Some(path_v), None) => {
+                let key = (path_v, sha_type, base64);
+                let cache = self.result_cache.lock().expect("result cache lock");
+                if let Some(hash) = cache.get(&key) {
+                    return Ok(hash.clone());
+                }
+                drop(cache);
+
                 let file_path =
-                    match search_for_file(&self.base_path, &path_v, &self.theme, &self.output_path)
+                    match search_for_file(&self.base_path, &key.0, &self.theme, &self.output_path)
                         .map_err(|e| Error::message(format!("`get_hash`: {}", e)))?
                     {
                         Some((f, _)) => f,
                         None => {
                             return Err(Error::message(format!(
                                 "`get_hash`: Cannot find file: {}",
-                                path_v
+                                key.0
                             )));
                         }
                     };
 
                 let mut f = fs::File::open(&file_path).map_err(|e| {
-                    Error::message(format!("File {} could not be open: {}", path_v, e))
+                    Error::message(format!("File {} could not be open: {}", key.0, e))
                 })?;
 
                 let mut contents = Vec::new();
                 f.read_to_end(&mut contents).map_err(|e| {
-                    Error::message(format!("File {} could not be read: {}", path_v, e))
+                    Error::message(format!("File {} could not be read: {}", key.0, e))
                 })?;
 
-                contents
+                (contents, Some(key))
             }
-            (None, Some(literal_v)) => literal_v.into_bytes(),
+            (None, Some(literal_v)) => (literal_v.into_bytes(), None),
         };
-
-        let sha_type: u16 = kwargs.get("sha_type")?.unwrap_or(384);
-        let base64: bool = kwargs.get("base64")?.unwrap_or(true);
 
         let hash = match sha_type {
             256 => compute_hash::<Sha256>(&contents, base64),
             384 => compute_hash::<Sha384>(&contents, base64),
             512 => compute_hash::<Sha512>(&contents, base64),
-            _ => return Err(Error::message("`get_hash`: Invalid sha value")),
+            _ => unreachable!(),
         };
+
+        if let Some(key) = cache_key {
+            let mut cache = self.result_cache.lock().expect("result cache lock");
+            cache.insert(key, hash.clone());
+        }
 
         Ok(hash)
     }

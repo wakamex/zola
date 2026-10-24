@@ -3,17 +3,17 @@
 title = "Portio-Zola"
 description = "Portio-Zola is a minimal, well-formatted and extremely flexible theme"
 template = "theme.html"
-date = 2026-06-23T22:07:15+02:00
+date = 2026-09-22T07:50:50+02:00
 
 [taxonomies]
 theme-tags = []
 
 [extra]
-created = 2026-06-23T22:07:15+02:00
-updated = 2026-06-23T22:07:15+02:00
+created = 2026-09-22T07:50:50+02:00
+updated = 2026-09-22T07:50:50+02:00
 repository = "https://github.com/quentin-rodriguez/portio-zola.git"
 homepage = "https://github.com/quentin-rodriguez/portio-zola.git"
-minimum_version = "0.21.0"
+minimum_version = "0.23.2"
 license = "MIT"
 demo = "https://quentin-rodriguez.github.io/portio-zola"
 
@@ -26,7 +26,7 @@ homepage = "https://github.com/quentin-rodriguez"
 
 <div align="center">
 
-[![Zola](https://img.shields.io/badge/Zola-0.22.0-red?style=for-the-badge)](https://www.getzola.org/)
+[![Zola](https://img.shields.io/badge/Zola-0.23.2-red?style=for-the-badge)](https://www.getzola.org/)
 [![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)](LICENSE)
 [![Live demo](https://img.shields.io/badge/-Live%20demo-blue?style=for-the-badge)](https://quentin-rodriguez.github.io/portio-zola)
 
@@ -73,10 +73,10 @@ git submodule add https://github.com/quentin-rodriguez/portio-zola.git themes/po
 git clone https://github.com/quentin-rodriguez/portio-zola.git themes/portio-zola
 ```
 
-4. Copy the theme's `config.toml` file into your project root
+4. Copy the theme's `zola.toml` file into your project root
 
 ```sh
-cp themes/portio-zola/config.toml .
+cp themes/portio-zola/zola.toml .
 ```
 
 5. Add the `theme` to the configuration file
@@ -88,8 +88,8 @@ theme = "portio-zola"
 6. Copy the theme `content` and `static` folders directly into your project root
 
 ```sh
-cp -r themes/portio-zola/content/ content/
-cp -r themes/portio-zola/static/ static/
+cp -r themes/portio-zola/content/ .
+cp -r themes/portio-zola/static/ .
 ```
 
 7. (Optional) Depending on the language set as `default_language`, the `_index.md` files must correspond to the appropriate language.

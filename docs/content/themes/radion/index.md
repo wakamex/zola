@@ -3,17 +3,17 @@
 title = "radion"
 description = "A sleek, modern blog theme."
 template = "theme.html"
-date = 2026-03-27T08:52:38-07:00
+date = 2026-09-27T18:42:26-05:00
 
 [taxonomies]
 theme-tags = ['SEO', 'search', 'accessible']
 
 [extra]
-created = 2026-03-27T08:52:38-07:00
-updated = 2026-03-27T08:52:38-07:00
+created = 2026-09-27T18:42:26-05:00
+updated = 2026-09-27T18:42:26-05:00
 repository = "https://github.com/micahkepe/radion.git"
 homepage = "https://github.com/micahkepe/radion"
-minimum_version = "0.22.0"
+minimum_version = "0.23.0"
 license = "MIT"
 demo = "https://micahkepe.com/radion/"
 
@@ -23,6 +23,9 @@ homepage = "https://micahkepe.com"
 +++        
 
 # radion
+
+> [!NOTE]
+> Requires Zola ^0.23.
 
 A sleek, modern blog theme for [Zola](https://www.getzola.org/). See the live
 site demo [here](https://micahkepe.com/radion/).

@@ -1,19 +1,19 @@
 
 +++
 title = "parchment"
-description = "Parchemnt theme, by jasonfry.co.uk"
+description = "Parchment theme, by jasonfry.co.uk"
 template = "theme.html"
-date = 2025-09-25T21:57:54+01:00
+date = 2026-08-20T21:07:47+01:00
 
 [taxonomies]
 theme-tags = []
 
 [extra]
-created = 2025-09-25T21:57:54+01:00
-updated = 2025-09-25T21:57:54+01:00
+created = 2026-08-20T21:07:47+01:00
+updated = 2026-08-20T21:07:47+01:00
 repository = "https://github.com/jsonfry/parchment"
-homepage = "https://github.com/json/parchment"
-minimum_version = "0.19.0"
+homepage = "https://github.com/jsonfry/parchment"
+minimum_version = "0.23.4"
 license = "MIT"
 demo = "https://whispers-on-parchment.jasonfry.co.uk"
 

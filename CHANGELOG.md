@@ -1,6 +1,20 @@
 # Changelog
 
-## 0.23.4 (unreleased)
+## 0.23.6 (2026-09-12)
+
+- Update tera version to support component implicit params
+
+## 0.23.5 (2026-09-11)
+
+- Fix `text_direction` not being wired up correctly and causing compilation errors when used in templates
+- Fix `get_taxonomy_url` in templated content not finding anything
+- Fix `get_taxonomy`, `get_taxonomy_term` and `get_taxonomy_url` not finding taxonomies via names if they differ when slugified
+- Update tera, adding back `locale` param to the `date` filter
+- Fix dark borders around PNG when resizing images
+- Cache results of `get_hash`
+- Rebuild whole site on any template change in `zola serve`, a smarter reload will come later
+
+## 0.23.4 (2026-08-20)
 
 - Fix another `get_url` bug adding a trailing slash for non default language
 - Fix `index.<default_language>.md` paths collision
@@ -8,6 +22,9 @@
 - Fix `get_url` returning links to pages/sections with `render = false`
 - Various fixes with `zola serve` -u/-i flags
 - Date sorting is now using descending permalink as tie breaker instead of ascending to match date sorting
+- Cache result of `get_url(..., cachebust=true)`
+- Do not error when setting heading ids in content with a Tera error
+- Properly merge taxonomies terms when needed after slugification
 
 ## 0.23.3 (2026-08-11)
 
@@ -50,8 +67,59 @@ and it was mostly because it contains a lot of Tera syntax (as we will see later
 As mentioned, shortcodes have been completely removed.
 Instead, you can now completely template the content of a page/section from the .md file, as well as use the new Tera
 components. No more weird separation of shortcode/macros, just use Tera, the same components you can use elsewhere in your site.
-This means you will need to rewrite your shortcodes into components most likely, see [Tera documentation](https://keats.github.io/tera/) for
+This means you will need to rewrite your shortcodes into components most likely, see [Tera documentation](https://keats.github.io/tera/#components) for
 more details.
+
+For example, a macro before 0.22:
+
+```jinja2
+{# templates/macros.html #}
+{% macro youtube(id, autoplay=false) %}
+<iframe src="https://www.youtube.com/embed/{{ id }}{% if autoplay %}?autoplay=1{% endif %}"></iframe>
+{% endmacro youtube %}
+
+{# in a template #}
+{% import "macros.html" as macros %}
+{{ macros::youtube(id="dQw4w9WgXcQ", autoplay=true) }}
+```
+
+becomes this component after 0.23:
+
+```jinja2
+{# in any template file, eg templates/components.html #}
+{% component youtube(id, autoplay=false) %}
+<iframe src="https://www.youtube.com/embed/{{ id }}{% if autoplay %}?autoplay=1{% endif %}"></iframe>
+{% endcomponent youtube %}
+
+{# in a template or in markdown content, no import needed #}
+{{ <youtube id="dQw4w9WgXcQ" autoplay={true} /> }}
+```
+
+And a shortcode taking a body:
+
+```md
+{% quote(author="Vincent") %}
+A quote
+{% end %}
+```
+
+becomes a component invoked with the block syntax, the body being available as the `body` variable inside it:
+
+```jinja2
+{# in any template file, eg templates/components.html #}
+{% component quote(author) %}
+<blockquote>{{ body }}<footer>{{ author }}</footer></blockquote>
+{% endcomponent quote %}
+
+{# in markdown content (or in a normal template) #}
+{% <quote author="Vincent"> %}
+A quote
+{% </quote> %}
+```
+
+Components are hygienic and only have access to the parameters you pass explicitly, eg if you need `lang` you have to pass 
+it as a parameter.
+
 If you use a theme, it will most likely need to be updated to work with Zola 0.23 before you can update.
 
 Follow the Tera migration guide (<https://github.com/Keats/tera/blob/master/MIGRATION.md>) for the changes in the template itself.

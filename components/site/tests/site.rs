@@ -1,6 +1,6 @@
 mod common;
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -144,6 +144,11 @@ fn can_build_site_without_live_reload() {
     assert!(file_contains!(public, "posts/python/index.html", "Basic shortcode"));
     assert!(file_contains!(public, "posts/python/index.html", "Arrrh Bob"));
     assert!(file_contains!(public, "posts/python/index.html", "Arrrh Bob_Sponge"));
+    assert!(file_contains!(
+        public,
+        "posts/python/index.html",
+        "https://replace-this-with-your-url.com/categories/a-category/"
+    ));
     assert!(!file_contains!(public, "posts/python/index.html", "SHOULDNOTAPPEAR"));
     assert!(!file_contains!(public, "posts/python/index.html", "DESCRIPTION"));
 
@@ -327,7 +332,7 @@ fn can_build_site_with_taxonomies() {
             let pages_data = std::mem::replace(&mut library.pages, AHashMap::new());
             for (i, (_, mut page)) in pages_data.into_iter().enumerate() {
                 page.meta.taxonomies = {
-                    let mut taxonomies = HashMap::new();
+                    let mut taxonomies = BTreeMap::new();
                     taxonomies.insert(
                         "categories".to_string(),
                         vec![if i % 2 == 0 { "A" } else { "B" }.to_string()],
@@ -649,7 +654,7 @@ fn can_build_site_with_pagination_for_taxonomy() {
                     nb_a_pages += 1;
                 }
                 page.meta.taxonomies = {
-                    let mut taxonomies = HashMap::new();
+                    let mut taxonomies = BTreeMap::new();
                     taxonomies.insert(
                         "tags".to_string(),
                         vec![if i % 2 == 0 { "A" } else { "B" }.to_string()],
@@ -949,7 +954,11 @@ fn can_check_site() {
     );
     assert_eq!(
         site.config.link_checker.skip_prefixes,
-        vec!["http://[2001:db8::]/", "http://invaliddomain"]
+        vec![
+            "http://[2001:db8::]/",
+            "http://invaliddomain",
+            "https://github.com/rust-lang/rust/blob/"
+        ]
     );
 
     site.config.enable_check_mode();
@@ -995,7 +1004,10 @@ fn external_links_ignored_on_check() {
     site.config.link_checker.skip_prefixes.remove(i);
 
     // confirm the invalid domain skip prefix was removed
-    assert_eq!(site.config.link_checker.skip_prefixes, vec!["http://[2001:db8::]/"]);
+    assert_eq!(
+        site.config.link_checker.skip_prefixes,
+        vec!["http://[2001:db8::]/", "https://github.com/rust-lang/rust/blob/"]
+    );
 
     // set a flag to skip external links check
     site.skip_external_links_check();

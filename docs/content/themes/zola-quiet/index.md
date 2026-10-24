@@ -3,14 +3,14 @@
 title = "zola-quiet"
 description = "A quiet, two-skin Zola theme: Minima-flavoured typography and a TUI/ncurses look with ASCII article frame. Both skins ship with matched light and dark modes plus a runtime toggle. Docs-style on-page TOC, addendum convention, iframe theme-sync protocol baked in."
 template = "theme.html"
-date = 2026-08-04T14:16:28+05:30
+date = 2026-10-12T17:47:18+05:30
 
 [taxonomies]
 theme-tags = []
 
 [extra]
-created = 2026-08-04T14:16:28+05:30
-updated = 2026-08-04T14:16:28+05:30
+created = 2026-10-12T17:47:18+05:30
+updated = 2026-10-12T17:47:18+05:30
 repository = "https://github.com/johnnybravo-xyz/zola-quiet.git"
 homepage = "https://github.com/johnnybravo-xyz/zola-quiet"
 minimum_version = "0.19.0"
@@ -247,6 +247,9 @@ Useful classes the stylesheets style:
 - `.post-list` — un-bulleted post list with `<time>` prefix.
 - `.tag-chip` — rounded pill rendered for each tag.
 - `figure.xkcd` — bordered comic figure with attribution caption.
+- `details.viz` — collapsible visualiser embed: a `<details>` whose
+  `<summary>` is the toggle and whose body is the iframe. Add `open`
+  to start expanded.
 - `.addendum`, `.addendum-eyebrow` — the dated-extension block.
 - `.controls`, `.skin-toggle`, `.theme-toggle` — top-right toggle pair.
 

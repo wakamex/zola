@@ -71,7 +71,7 @@ const METHOD_NOT_ALLOWED_TEXT: &[u8] = b"Method Not Allowed";
 const NOT_FOUND_TEXT: &[u8] = b"Not Found";
 
 // Templates used while rendering Markdown: reloading the registry isn't enough. See #2940.
-const ALWAYS_FULL_REBUILD: &[&str] = &["anchor-link.html"];
+// const ALWAYS_FULL_REBUILD: &[&str] = &["anchor-link.html"];
 
 // This is dist/livereload.min.js from the LiveReload.js v3.2.4 release
 const LIVE_RELOAD: &str = include_str!("livereload.js");
@@ -670,8 +670,8 @@ pub fn serve(
 
             log::info!(
                 "Web server is available at {} (bound to {})\n",
-                &constructed_base_url.replace(&bind_address.to_string(), &local_addr.to_string()),
-                &local_addr
+                constructed_base_url.replace(&bind_address.to_string(), &local_addr.to_string()),
+                local_addr
             );
             if open && let Err(err) = open::that(&constructed_base_url) {
                 log::error!("Failed to open URL in your browser: {err}");
@@ -878,11 +878,13 @@ pub fn serve(
                                 .join(", ");
                             log::info!("-> Template file(s) changed {combined_paths}");
 
-                            let needs_full_rebuild = full_paths.iter().any(|p| {
-                                p.file_name()
-                                    .and_then(|n| n.to_str())
-                                    .is_some_and(|n| ALWAYS_FULL_REBUILD.contains(&n))
-                            });
+                            // let needs_full_rebuild = full_paths.iter().any(|p| {
+                            //     p.file_name()
+                            //         .and_then(|n| n.to_str())
+                            //         .is_some_and(|n| ALWAYS_FULL_REBUILD.contains(&n))
+                            // });
+                            // Temporary fix for https://github.com/getzola/zola/issues/3246
+                            let needs_full_rebuild = true;
                             if needs_full_rebuild {
                                 log::info!("Rebuilding the site");
                                 if let Some(s) = recreate_site() {

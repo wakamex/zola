@@ -3,17 +3,17 @@
 title = "Kita"
 description = "Kita is a clean, elegant and simple blog theme for Zola."
 template = "theme.html"
-date = 2026-05-26T08:16:11+02:00
+date = 2026-10-10T23:51:04+08:00
 
 [taxonomies]
 theme-tags = []
 
 [extra]
-created = 2026-05-26T08:16:11+02:00
-updated = 2026-05-26T08:16:11+02:00
+created = 2026-10-10T23:51:04+08:00
+updated = 2026-10-10T23:51:04+08:00
 repository = "https://github.com/st1020/kita.git"
 homepage = "https://github.com/st1020/kita"
-minimum_version = "0.17.0"
+minimum_version = "0.23.6"
 license = "MIT"
 demo = "https://kita-zola.pages.dev"
 
@@ -54,6 +54,8 @@ This theme is based on Hugo theme [hugo-paper](https://github.com/nanxiaobei/hug
 
 ## Installation
 
+Requires Zola 0.23.6 or newer.
+
 The easiest way to install this theme is to clone this repository in the themes directory:
 
 ```sh
@@ -66,7 +68,7 @@ Or to use it as a submodule:
 git submodule add https://github.com/st1020/kita.git themes/kita
 ```
 
-Then set `kita` as your theme in `config.toml`.
+Then set `kita` as your theme in `zola.toml`.
 
 ```toml
 theme = "kita"
@@ -74,7 +76,19 @@ theme = "kita"
 
 ## Configuration
 
-See the `extra` section in [zola.toml](https://github.com/st1020/kita/blob/main/zola.toml) as a example.
+See the `extra` section in [zola.toml](https://github.com/st1020/kita/blob/main/zola.toml) as an example.
+
+## Components
+
+Zola 0.23 replaced shortcodes with Tera components. Update existing content to use `admonition`, `mermaid`, `gallery`, and `inline_svg`. For example:
+
+```markdown
+{%/* <admonition type="note" title="Note"> */%}
+Your **Markdown** content.
+{%/* </admonition> */%}
+```
+
+See [the examples](content/shortcodes/index.md) for all components. Wrap literal Tera syntax in `{%/* raw */%}` / `{%/* endraw */%}` blocks inside Markdown code examples.
 
 ## Inject support
 
