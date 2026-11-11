@@ -175,11 +175,11 @@ pub fn render_section(
 
 #[cfg(test)]
 mod tests {
-    use std::borrow::Cow;
     use ahash::AHashMap;
     use config::Config;
     use content::{Library, Page};
     use render::{RenderCache, Renderer};
+    use std::borrow::Cow;
     use std::path::Path;
     use std::path::PathBuf;
     use templates::ZOLA_TERA;
