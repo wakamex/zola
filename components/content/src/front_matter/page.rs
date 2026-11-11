@@ -75,6 +75,9 @@ pub struct PageFrontMatter {
     /// Whether to hide this page everywhere but still render it
     #[serde(skip_serializing)]
     pub hidden: Option<bool>,
+    /// Whether to render LaTeX math on this page, overriding `markdown.math`
+    #[serde(skip_serializing)]
+    pub math: Option<bool>,
     /// Any extra parameter present in the front matter
     #[serde(default = "default_extra", deserialize_with = "deserialize_extra")]
     pub extra: Value,
@@ -178,6 +181,7 @@ impl Default for PageFrontMatter {
             aliases: Vec::new(),
             template: None,
             hidden: None,
+            math: None,
             extra: Value::from(Map::new()),
         }
     }

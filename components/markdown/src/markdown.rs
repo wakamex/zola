@@ -3,6 +3,7 @@ use std::sync::LazyLock;
 use ahash::{AHashMap, AHashSet};
 use gh_emoji::Replacer as EmojiReplacer;
 use giallo::{ExtraHtmlContent, HtmlRenderer, ParsedFence, parse_markdown_fence};
+use math_core::{LatexToMathML, MathCoreConfig, MathDisplay};
 use pulldown_cmark::{CodeBlockKind, CowStr, Event, LinkType, Parser, Tag, TagEnd};
 use pulldown_cmark_escape::{escape_href, escape_html};
 use regex::{Regex, RegexBuilder};
@@ -20,6 +21,36 @@ use crate::MarkdownContext;
 
 const CONTINUE_READING: &str = "<span id=\"continue-reading\"></span>";
 static EMOJI_REPLACER: LazyLock<EmojiReplacer> = LazyLock::new(EmojiReplacer::new);
+static MATH_CONVERTER: LazyLock<LatexToMathML> = LazyLock::new(|| {
+    LatexToMathML::new(MathCoreConfig::default(), vec![]).expect("no custom macros to parse")
+});
+
+/// Renders LaTeX to MathML. LaTeX that cannot be converted is kept visible as escaped source.
+fn render_math(latex: &str, display: MathDisplay, path: &str) -> String {
+    let mut result = MATH_CONVERTER.convert_with_local_state(latex, display);
+    // LaTeX accepts `\tag` only in an equation environment, while KaTeX and Markdown authors
+    // also use it in plain display math.
+    if result.is_err() && matches!(display, MathDisplay::Block) && latex.contains("\\tag") {
+        let wrapped = format!("\\begin{{equation*}}{latex}\\end{{equation*}}");
+        if let Ok(converted) = MATH_CONVERTER.convert_with_local_state(&wrapped, display) {
+            result = Ok(converted);
+        }
+    }
+    match result {
+        Ok(result) => result.mathml,
+        Err(err) => {
+            log::warn!("Could not render math `{latex}` in {path}: {err}");
+            let (delimiter, tag) = match display {
+                MathDisplay::Inline => ("$", "code"),
+                MathDisplay::Block => ("$$", "pre"),
+            };
+            let mut html = format!("<{tag} class=\"math-error\">{delimiter}");
+            escape_html(&mut html, latex).unwrap();
+            html.push_str(&format!("{delimiter}</{tag}>"));
+            html
+        }
+    }
+}
 
 static FOOTNOTES_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"<sup class="footnote-reference"( id=\s*.*?)?><a href=\s*.*?>\s*.*?</a></sup>"#)
@@ -649,6 +680,17 @@ impl<'a> State<'a> {
                 self.push(Event::Text(text));
             }
 
+            Event::InlineMath(latex) => {
+                self.push(Event::InlineHtml(
+                    render_math(&latex, MathDisplay::Inline, ctx.current_path).into(),
+                ));
+            }
+            Event::DisplayMath(latex) => {
+                self.push(Event::InlineHtml(
+                    render_math(&latex, MathDisplay::Block, ctx.current_path).into(),
+                ));
+            }
+
             Event::SoftBreak if ctx.config.markdown.hard_breaks => {
                 self.push(Event::HardBreak);
             }
@@ -813,6 +855,7 @@ mod tests {
             current_permalink: "",
             current_path: "",
             insert_anchor: InsertAnchor::None,
+            math: config.markdown.math,
         }
     }
 

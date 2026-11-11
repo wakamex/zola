@@ -142,6 +142,7 @@ fn can_customise_anchor_template() {
         current_permalink: "",
         current_path: "",
         insert_anchor: InsertAnchor::Right,
+        math: false,
     };
     let body = render_content("# Hello", &context).unwrap().body;
     insta::assert_snapshot!(body);
@@ -165,6 +166,7 @@ fn can_customise_summary_template() {
         current_permalink: "",
         current_path: "",
         insert_anchor: InsertAnchor::Right,
+        math: false,
     };
     let summary = render_content("Hello <!-- more --> World!", &context).unwrap().summary.unwrap();
     insta::assert_snapshot!(summary);
@@ -553,4 +555,43 @@ fn hard_breaks_are_opt_in() {
     config.markdown.hard_breaks = true;
     let hard_break_body = common::render_with_config(markdown, config).unwrap().body;
     assert_eq!(hard_break_body, "<p>First line<br />\nSecond line</p>\n");
+}
+
+#[test]
+fn math_is_opt_in() {
+    let markdown = "Energy $E = mc^2$.";
+    let default_body = common::render(markdown).unwrap().body;
+    assert!(!default_body.contains("<math"));
+    assert!(default_body.contains("$E = mc^2$"));
+
+    let mut config = Config::default_for_test();
+    config.markdown.math = true;
+    let body = common::render_with_config(markdown, config).unwrap().body;
+    assert!(body.contains("<math><mi>E</mi>"), "{body}");
+}
+
+#[test]
+fn math_protects_latex_from_emphasis() {
+    let mut config = Config::default_for_test();
+    config.markdown.math = true;
+    let body = common::render_with_config("$$\na_1 * b_2 * c\n$$", config).unwrap().body;
+    assert!(body.contains("<math display=\"block\">"), "{body}");
+    assert!(!body.contains("<em>"), "{body}");
+}
+
+#[test]
+fn unrenderable_math_stays_visible() {
+    let mut config = Config::default_for_test();
+    config.markdown.math = true;
+    let body = common::render_with_config(r"$\left( x$", config).unwrap().body;
+    assert!(body.contains(r#"<code class="math-error">$\left( x$</code>"#), "{body}");
+}
+
+#[test]
+fn display_math_accepts_equation_tags() {
+    let mut config = Config::default_for_test();
+    config.markdown.math = true;
+    let body = common::render_with_config(r"$$D = 1 - \frac{a}{b} \tag{1}$$", config).unwrap().body;
+    assert!(!body.contains("math-error"), "{body}");
+    assert!(body.contains("(1)"), "{body}");
 }

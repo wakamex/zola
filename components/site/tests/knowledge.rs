@@ -412,3 +412,21 @@ fn assert_export_path_rejected(export_path: &str, expected: &str) {
     let error = site.build().unwrap_err();
     assert!(format!("{error:#}").contains(expected));
 }
+
+#[test]
+fn renders_math_only_on_pages_that_opt_in() {
+    let root = knowledge_site("");
+    let body = "Energy $E = mc^2$ costs $5 and $10.\n";
+    fs::write(root.path().join("content/guides/paper.md"), format!("---\nmath: true\n---\n{body}"))
+        .unwrap();
+    fs::write(root.path().join("content/guides/prices.md"), body).unwrap();
+
+    let mut site = Site::new(root.path(), "config.toml").unwrap();
+    site.load().unwrap();
+    let pages = &site.library.pages;
+    let paper = &pages[&root.path().join("content/guides/paper.md")];
+    let prices = &pages[&root.path().join("content/guides/prices.md")];
+    assert!(paper.content.contains("<math><mi>E</mi>"), "{}", paper.content);
+    assert!(!prices.content.contains("<math"), "{}", prices.content);
+    assert!(prices.content.contains("$E = mc^2$ costs $5 and $10."), "{}", prices.content);
+}

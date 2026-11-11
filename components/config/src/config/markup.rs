@@ -168,6 +168,9 @@ pub struct Markdown {
     pub github_alerts: bool,
     /// Whether Markdown soft breaks should render as HTML line breaks.
     pub hard_breaks: bool,
+    /// Whether `$...$` and `$$...$$` are parsed as LaTeX math and rendered to MathML.
+    /// Pages can override this with `math` in their front matter.
+    pub math: bool,
     /// Whether to enable Wikilinks style links, eg [[title]] like Obsidian
     pub wikilinks: bool,
 }
@@ -242,6 +245,7 @@ impl Default for Markdown {
             insert_anchor_links: InsertAnchor::None,
             github_alerts: false,
             hard_breaks: false,
+            math: false,
             wikilinks: false,
         }
     }

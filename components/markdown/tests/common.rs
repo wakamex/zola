@@ -61,6 +61,7 @@ fn configurable_render(
         current_permalink: "https://www.getzola.org/test/",
         current_path: "my_page.md",
         insert_anchor,
+        math: config.markdown.math,
     };
 
     render_content(content, &context)

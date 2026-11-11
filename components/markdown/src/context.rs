@@ -16,6 +16,8 @@ pub struct MarkdownContext<'a> {
     pub current_permalink: &'a str,
     pub current_path: &'a str,
     pub insert_anchor: InsertAnchor,
+    /// Whether `$...$` and `$$...$$` are rendered as math for this content.
+    pub math: bool,
 }
 
 impl<'a> MarkdownContext<'a> {
@@ -35,6 +37,9 @@ impl<'a> MarkdownContext<'a> {
         }
         if self.config.markdown.github_alerts {
             opts.insert(Options::ENABLE_GFM);
+        }
+        if self.math {
+            opts.insert(Options::ENABLE_MATH);
         }
         if self.config.markdown.wikilinks {
             opts.insert(Options::ENABLE_WIKILINKS);

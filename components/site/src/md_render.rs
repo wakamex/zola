@@ -99,6 +99,7 @@ pub fn render_page(
         current_permalink: &page.permalink,
         current_path: &page.file.relative,
         insert_anchor,
+        math: page.meta.math.unwrap_or(config.markdown.math),
     };
     let res = markdown::render_content(&input, &context)
         .with_context(|| format!("Failed to render content of {}", page.file.path.display()))?;
@@ -154,6 +155,7 @@ pub fn render_section(
             .meta
             .insert_anchor_links
             .unwrap_or(config.markdown.insert_anchor_links),
+        math: config.markdown.math,
     };
     let res = markdown::render_content(&input, &context)
         .with_context(|| format!("Failed to render content of {}", section.file.path.display()))?;
